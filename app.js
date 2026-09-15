@@ -51,7 +51,124 @@ async function addDoc(){try{let url=val('du');const f=document.getElementById('d
 async function saveInfo(){data.info={about:val('ia'),contacts:val('ic'),management:val('im'),constitution:val('ix')};if(sb){const {error}=await sb.from('wpu_info').upsert({id:1,...data.info,updated_at:new Date().toISOString()});if(error){alert(error.message);return}}save();render()}
 function val(id){return document.getElementById(id)?.value?.trim()||''}
 function downloadBackup(){const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='WPU-2026-rugsteun.json';a.click();URL.revokeObjectURL(u)}
-function restoreBackup(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{data=JSON.parse(r.result);save();render();alert('Rugsteun herstel.') }catch{alert('Ongeldige rugsteun.')}};r.readAsText(f)}
+async function restoreBackup(e){
+  const f=e.target.files[0];
+  if(!f)return;
+
+  const r=new FileReader();
+
+  r.onload=async()=>{
+    try{
+      const backup=JSON.parse(r.result);
+
+      if(!backup || typeof backup!=='object'){
+        throw new Error('Ongeldige rugsteun.');
+      }
+
+      if(!sb){
+        data=backup;
+        save();
+        render();
+        alert('Rugsteun herstel op hierdie toestel. Supabase is nie gekoppel nie.');
+        return;
+      }
+
+      if(!currentUser){
+        alert('Meld eers as Admin aan voordat jy die rugsteun na die wolk laai.');
+        return;
+      }
+
+      const winners=Array.isArray(backup.winners)?backup.winners:[];
+      const events=Array.isArray(backup.events)?backup.events:[];
+      const results=Array.isArray(backup.results)?backup.results:[];
+      const docs=Array.isArray(backup.docs)?backup.docs:[];
+      const info=backup.info||{};
+
+      let count=0;
+
+      for(const x of winners){
+        const {error}=await sb.from('weekly_winners').upsert({
+          id:x.id||crypto.randomUUID(),
+          week:x.week||'',
+          race:x.race||'',
+          name:x.name||'',
+          club:x.club||'',
+          date:x.date||null,
+          image_url:x.image||'',
+          caption:x.caption||''
+        });
+        if(error)throw error;
+        count++;
+      }
+
+      for(const x of events){
+        const {error}=await sb.from('events').upsert({
+          id:x.id||crypto.randomUUID(),
+          title:x.title||'',
+          date:x.date||null,
+          location:x.location||'',
+          description:x.description||'',
+          images:Array.isArray(x.images)?x.images:[]
+        });
+        if(error)throw error;
+        count++;
+      }
+
+      for(const x of results){
+        const {error}=await sb.from('results').upsert({
+          id:x.id||crypto.randomUUID(),
+          title:x.title||'',
+          category:x.category||'WPU',
+          date:x.date||null,
+          pdf_url:x.url||''
+        });
+        if(error)throw error;
+        count++;
+      }
+
+      for(const x of docs){
+        const {error}=await sb.from('documents').upsert({
+          id:x.id||crypto.randomUUID(),
+          title:x.title||'',
+          type:x.type||'info',
+          date:x.date||null,
+          url:x.url||'',
+          note:x.note||''
+        });
+        if(error)throw error;
+        count++;
+      }
+
+      const {error:infoError}=await sb.from('wpu_info').upsert({
+        id:1,
+        about:info.about||'',
+        contacts:info.contacts||'',
+        management:info.management||'',
+        constitution:info.constitution||'',
+        updated_at:new Date().toISOString()
+      });
+
+      if(infoError)throw infoError;
+
+      await cloudLoad();
+      save();
+      render();
+
+      alert(
+        'Rugsteun suksesvol na Supabase gelaai.\n\n' +
+        count +
+        ' inhoud-items is gesinkroniseer.\n\n' +
+        Alle fone en rekenaars wat die LIVE app gebruik kan nou dieselfde data sien.'
+      );
+
+    }catch(err){
+      console.error(err);
+      alert('Rugsteun kon nie na Supabase gelaai word nie:\n\n'+(err.message||err));
+    }
+  };
+
+  r.readAsText(f);
+}
 function resetDemo(){if(confirm('Herstel demo-inhoud? Jou huidige plaaslike data word vervang.')){localStorage.removeItem('wpu_data');data=seed;render()}}
 async function refreshLive(){if(!sb)return;await cloudLoad();render()}
 async function openPdf(url,title='PDF'){if(!url)return;try{if(url.startsWith('data:')){const parts=url.split(',');const bin=atob(parts[1]||'');const bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));setTimeout(()=>URL.revokeObjectURL(url),600000)}if(!/^https?:|^blob:/.test(url)){alert('Die PDF-skakel is ongeldig. Laai die PDF weer in by Admin.');return}window.open(url,'_blank','noopener,noreferrer')}catch(e){console.error(e);alert('Die PDF kon nie oopgemaak word nie. Gebruik “Open direk” indien jou foon se PDF-leser dit vereis.')}} 
