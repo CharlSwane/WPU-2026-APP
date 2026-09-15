@@ -1,6 +1,37 @@
 const CONFIG=window.WPU_CONFIG||{};let sb=null;try{if(CONFIG.supabaseUrl&&CONFIG.supabaseAnonKey&&!CONFIG.supabaseUrl.includes('YOUR-'))sb=supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseAnonKey)}catch(e){}
 let cloudReady=!!sb, currentUser=null;
-async function cloudLoad(){if(!sb)return; try{const [w,e,r,d,i]=await Promise.all([sb.from('weekly_winners').select('*').order('created_at',{ascending:false}),sb.from('events').select('*').order('created_at',{ascending:false}),sb.from('results').select('*').order('created_at',{ascending:false}),sb.from('documents').select('*').order('created_at',{ascending:false}),sb.from('wpu_info').select('*').eq('id',1).single()]); if(!w.error)data.winners=w.data.map(x=>({id:x.id,week:x.week,race:x.race,name:x.name,club:x.club,date:x.date,image:x.image_url,caption:x.caption})); if(!e.error)data.events=e.data.map(x=>({id:x.id,title:x.title,date:x.date,location:x.location,description:x.description,images:x.images||[]})); if(!r.error)data.results=r.data.map(x=>({id:x.id,title:x.title,category:x.category,date:x.date,url:x.pdf_url})); if(!d.error)data.docs=d.data.map(x=>({id:x.id,title:x.title,type:x.type,date:x.date,url:x.url,note:x.note})); if(!i.error&&i.data)data.info={about:i.data.about||'',contacts:i.data.contacts||'',management:i.data.management||'',constitution:i.data.constitution||''}; }catch(e){console.warn('Cloud load failed',e)} }
+let lastGoodCloud=null;
+async function cloudLoad(){
+ if(!sb)return false;
+ try{
+  const [w,e,r,d,i]=await Promise.all([
+   sb.from('weekly_winners').select('*').order('created_at',{ascending:false}),
+   sb.from('events').select('*').order('created_at',{ascending:false}),
+   sb.from('results').select('*').order('created_at',{ascending:false}),
+   sb.from('documents').select('*').order('created_at',{ascending:false}),
+   sb.from('wpu_info').select('*').eq('id',1).single()
+  ]);
+  const errors=[w,e,r,d,i].filter(x=>x.error);
+  if(errors.length){
+   console.warn('Cloud load incomplete; keeping last good data.',errors.map(x=>x.error?.message));
+   return false;
+  }
+  const cloudData={
+   winners:w.data.map(x=>({id:x.id,week:x.week,race:x.race,name:x.name,club:x.club,date:x.date,image:x.image_url,caption:x.caption})),
+   events:e.data.map(x=>({id:x.id,title:x.title,date:x.date,location:x.location,description:x.description,images:x.images||[]})),
+   results:r.data.map(x=>({id:x.id,title:x.title,category:x.category,date:x.date,url:x.pdf_url})),
+   docs:d.data.map(x=>({id:x.id,title:x.title,type:x.type,date:x.date,url:x.url,note:x.note})),
+   info:i.data?{about:i.data.about||'',contacts:i.data.contacts||'',management:i.data.management||'',constitution:i.data.constitution||''}:{about:'',contacts:'',management:'',constitution:''}
+  };
+  data=cloudData;
+  lastGoodCloud=JSON.stringify(cloudData);
+  save();
+  return true;
+ }catch(e){
+  console.warn('Cloud load failed; local data preserved',e);
+  return false;
+ }
+}
 async function cloudInsert(table,row){if(!sb)return null; const {data:res,error}=await sb.from(table).insert(row).select().single(); if(error)throw error; return res}
 async function uploadMedia(file){
  if(!sb||!file)return null;
@@ -78,18 +109,23 @@ async function restoreBackup(e){
    const incoming=parsed&&parsed.data?parsed.data:parsed;
    if(!incoming||!Array.isArray(incoming.winners)||!Array.isArray(incoming.events)||!Array.isArray(incoming.results)||!Array.isArray(incoming.docs)||!incoming.info)throw new Error('Die rugsteunformaat is ongeldig.');
    if(sb&&!currentUser)throw new Error('Meld eers as Admin aan voordat jy ’n rugsteun na die wolk herstel.');
-   data={winners:incoming.winners||[],events:incoming.events||[],results:incoming.results||[],docs:incoming.docs||[],info:incoming.info||{about:'',contacts:'',management:'',constitution:''}};
+   const next={winners:incoming.winners||[],events:incoming.events||[],results:incoming.results||[],docs:incoming.docs||[],info:incoming.info||{about:'',contacts:'',management:'',constitution:''}};
    if(sb){
     const cloudUpsert=async(table,row)=>{const {error}=await sb.from(table).upsert(row,{onConflict:'id'});if(error)throw error};
-    for(const x of data.winners)await cloudUpsert('weekly_winners',{id:x.id,week:x.week,race:x.race,name:x.name,club:x.club||'',date:x.date||null,image_url:x.image||'',caption:x.caption||''});
-    for(const x of data.events)await cloudUpsert('events',{id:x.id,title:x.title,date:x.date||null,location:x.location||'',description:x.description||'',images:x.images||[]});
-    for(const x of data.results)await cloudUpsert('results',{id:x.id,title:x.title,category:x.category,date:x.date||null,pdf_url:x.url||''});
-    for(const x of data.docs)await cloudUpsert('documents',{id:x.id,title:x.title,type:x.type,date:x.date||null,url:x.url||'',note:x.note||''});
-    const {error:ie}=await sb.from('wpu_info').upsert({id:1,...data.info,updated_at:new Date().toISOString()},{onConflict:'id'});
+    for(const x of next.winners)await cloudUpsert('weekly_winners',{id:x.id,week:x.week,race:x.race,name:x.name,club:x.club||'',date:x.date||null,image_url:x.image||'',caption:x.caption||''});
+    for(const x of next.events)await cloudUpsert('events',{id:x.id,title:x.title,date:x.date||null,location:x.location||'',description:x.description||'',images:x.images||[]});
+    for(const x of next.results)await cloudUpsert('results',{id:x.id,title:x.title,category:x.category,date:x.date||null,pdf_url:x.url||''});
+    for(const x of next.docs)await cloudUpsert('documents',{id:x.id,title:x.title,type:x.type,date:x.date||null,url:x.url||'',note:x.note||''});
+    const {error:ie}=await sb.from('wpu_info').upsert({id:1,...next.info,updated_at:new Date().toISOString()},{onConflict:'id'});
     if(ie)throw ie;
-    await cloudLoad();
-   }
-   save();render();alert('Rugsteun suksesvol herstel en met die wolk gesinkroniseer.');
+    data=next; save(); render();
+    const ok=await cloudLoad();
+    if(!ok)throw new Error('Die rugsteun is nie deur Supabase bevestig nie. Geen plaaslike data is verloor nie.');
+    if(data.winners.length!==next.winners.length||data.events.length!==next.events.length||data.results.length!==next.results.length||data.docs.length!==next.docs.length){
+      throw new Error('Supabase het nie al die rugsteunrekords bevestig nie. Die herstel is gestop.');
+    }
+   }else{data=next;save();render();}
+   alert('Rugsteun suksesvol herstel en permanent met die wolk gesinkroniseer.');
   }catch(err){alert(err.message||'Ongeldige rugsteun.')}
   e.target.value='';
  };
@@ -99,18 +135,27 @@ function resetDemo(){if(confirm('Herstel demo-inhoud? Jou huidige plaaslike data
 async function refreshLive(){if(!sb)return;await cloudLoad();render()}
 async function openPdf(url,title='PDF'){
  if(!url)return;
+ let tempUrl=null;
  try{
   if(url.startsWith('data:')){
    const parts=url.split(','),bin=atob(parts[1]||''),bytes=new Uint8Array(bin.length);
    for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
-   url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
-   setTimeout(()=>URL.revokeObjectURL(url),600000);
+   tempUrl=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})); url=tempUrl;
   }
   if(!/^https?:|^blob:/.test(url)){alert('Die PDF-skakel is ongeldig. Laai die PDF weer in by Admin.');return}
-  const w=window.open(url,'_blank');
-  if(!w){
-   const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.click();
+  // Try a normal new tab first. Mobile browsers may block it, so provide a direct link.
+  const w=window.open('', '_blank');
+  if(w){
+    w.location.href=url;
+    try{w.opener=null}catch(_){}
+    setTimeout(()=>{try{w.document.title=title||'WPU PDF'}catch(_){}},200);
+  }else{
+    const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.download='';document.body.appendChild(a);a.click();a.remove();
   }
- }catch(e){console.error(e);alert('Die PDF kon nie oopgemaak word nie. Tik “Open direk” om die foon se PDF-leser te gebruik.')}
-} 
-if(sb){sb.auth.getUser().then(({data:r})=>{currentUser=r.user||null;return cloudLoad()}).then(()=>render()).catch(()=>render())}else render(); if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{}); setInterval(()=>{if(sb)refreshLive().catch(()=>{})},60000);
+ }catch(err){
+  console.error(err);
+  alert('Die PDF kon nie oopgemaak word nie. Gebruik asseblief “Open direk” of laai die PDF weer in by Admin.');
+ }
+ if(tempUrl)setTimeout(()=>URL.revokeObjectURL(tempUrl),600000);
+}
+if(sb){sb.auth.getUser().then(({data:r})=>{currentUser=r.user||null;return cloudLoad()}).then(()=>render()).catch(()=>render())}else render(); if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{}); setInterval(async()=>{if(sb){const ok=await cloudLoad();if(ok)render()}},60000);
