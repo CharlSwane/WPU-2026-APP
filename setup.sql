@@ -14,6 +14,20 @@ alter table public.results enable row level security;
 alter table public.documents enable row level security;
 alter table public.wpu_info enable row level security;
 
+-- Re-runnable policy setup: remove older copies first.
+drop policy if exists "public read winners" on public.weekly_winners;
+drop policy if exists "admin write winners" on public.weekly_winners;
+drop policy if exists "public read events" on public.events;
+drop policy if exists "admin write events" on public.events;
+drop policy if exists "public read results" on public.results;
+drop policy if exists "admin write results" on public.results;
+drop policy if exists "public read documents" on public.documents;
+drop policy if exists "admin write documents" on public.documents;
+drop policy if exists "public read info" on public.wpu_info;
+drop policy if exists "admin write info" on public.wpu_info;
+drop policy if exists "public media read" on storage.objects;
+drop policy if exists "admin media write" on storage.objects;
+
 create policy "public read winners" on public.weekly_winners for select using (true);
 create policy "admin write winners" on public.weekly_winners for all using (auth.uid() in (select user_id from public.admins)) with check (auth.uid() in (select user_id from public.admins));
 create policy "public read events" on public.events for select using (true);

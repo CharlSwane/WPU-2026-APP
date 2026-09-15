@@ -2,7 +2,15 @@ const CONFIG=window.WPU_CONFIG||{};let sb=null;try{if(CONFIG.supabaseUrl&&CONFIG
 let cloudReady=!!sb, currentUser=null;
 async function cloudLoad(){if(!sb)return; try{const [w,e,r,d,i]=await Promise.all([sb.from('weekly_winners').select('*').order('created_at',{ascending:false}),sb.from('events').select('*').order('created_at',{ascending:false}),sb.from('results').select('*').order('created_at',{ascending:false}),sb.from('documents').select('*').order('created_at',{ascending:false}),sb.from('wpu_info').select('*').eq('id',1).single()]); if(!w.error)data.winners=w.data.map(x=>({id:x.id,week:x.week,race:x.race,name:x.name,club:x.club,date:x.date,image:x.image_url,caption:x.caption})); if(!e.error)data.events=e.data.map(x=>({id:x.id,title:x.title,date:x.date,location:x.location,description:x.description,images:x.images||[]})); if(!r.error)data.results=r.data.map(x=>({id:x.id,title:x.title,category:x.category,date:x.date,url:x.pdf_url})); if(!d.error)data.docs=d.data.map(x=>({id:x.id,title:x.title,type:x.type,date:x.date,url:x.url,note:x.note})); if(!i.error&&i.data)data.info={about:i.data.about||'',contacts:i.data.contacts||'',management:i.data.management||'',constitution:i.data.constitution||''}; }catch(e){console.warn('Cloud load failed',e)} }
 async function cloudInsert(table,row){if(!sb)return null; const {data:res,error}=await sb.from(table).insert(row).select().single(); if(error)throw error; return res}
-async function uploadMedia(file){if(!sb||!file)return null; const ext=(file.name.split('.').pop()||'bin').toLowerCase(); const path=`${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`; const {error}=await sb.storage.from('wpu-media').upload(path,file,{upsert:false}); if(error)throw error; return sb.storage.from('wpu-media').getPublicUrl(path).data.publicUrl}
+async function uploadMedia(file){
+ if(!sb||!file)return null;
+ const ext=(file.name.split('.').pop()||'bin').toLowerCase();
+ const path=`${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+ const contentType=file.type||({'pdf':'application/pdf','jpg':'image/jpeg','jpeg':'image/jpeg','png':'image/png','webp':'image/webp'}[ext]||'application/octet-stream');
+ const {error}=await sb.storage.from('wpu-media').upload(path,file,{upsert:false,contentType,cacheControl:'3600'});
+ if(error)throw error;
+ return sb.storage.from('wpu-media').getPublicUrl(path).data.publicUrl;
+}
 function fileData(file){return new Promise((resolve,reject)=>{if(!file)return resolve('');const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file)})}
 async function loginAdmin(){if(!sb){alert('Cloud is not configured.');return} const email=val('ae'),password=val('ap');const {data:res,error}=await sb.auth.signInWithPassword({email,password});if(error){alert(error.message);return}currentUser=res.user;await cloudLoad();alert('Admin aangemeld.');render()}
 async function logoutAdmin(){if(sb)await sb.auth.signOut();currentUser=null;render()}
@@ -50,126 +58,59 @@ async function addResult(){try{let url=val('ru');const f=document.getElementById
 async function addDoc(){try{let url=val('du');const f=document.getElementById('duf')?.files[0];if(f)url=sb?await uploadMedia(f):await fileData(f);const row={id:crypto.randomUUID(),title:val('dt'),type:val('dy'),date:new Date().toISOString().slice(0,10),url:url,note:val('dn')};const ed=window._edit?.type==='doc'?window._edit:null;if(sb){if(ed){const {error}=await sb.from('documents').update({title:row.title,type:row.type,url:row.url,note:row.note}).eq('id',ed.id);if(error)throw error;row.id=ed.id}else{const x=await cloudInsert('documents',{title:row.title,type:row.type,date:row.date,url:row.url,note:row.note});row.id=x.id}}const i=data.docs.findIndex(x=>x.id===(ed?.id));if(ed&&i>=0){row.date=data.docs[i].date;data.docs[i]=row}else data.docs.unshift(row);window._edit=null;save();render()}catch(e){alert(e.message||e)}}
 async function saveInfo(){data.info={about:val('ia'),contacts:val('ic'),management:val('im'),constitution:val('ix')};if(sb){const {error}=await sb.from('wpu_info').upsert({id:1,...data.info,updated_at:new Date().toISOString()});if(error){alert(error.message);return}}save();render()}
 function val(id){return document.getElementById(id)?.value?.trim()||''}
-function downloadBackup(){const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='WPU-2026-rugsteun.json';a.click();URL.revokeObjectURL(u)}
+async function downloadBackup(){
+ try{
+  if(sb){await cloudLoad();}
+  const backup={version:3,exported_at:new Date().toISOString(),source:sb?'Supabase + plaaslike kopie':'plaaslike kopie',data};
+  const b=new Blob([JSON.stringify(backup,null,2)],{type:'application/json;charset=utf-8'});
+  const u=URL.createObjectURL(b),a=document.createElement('a');
+  a.href=u;a.download='WPU-2026-rugsteun.json';document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),1000);
+  alert('Rugsteun afgelaai. Die rugsteun bevat nou die huidige Supabase-data en kan op ’n ander toestel herstel word.');
+ }catch(e){alert('Rugsteun kon nie gemaak word nie: '+(e.message||e))}
+}
 async function restoreBackup(e){
-  const f=e.target.files[0];
-  if(!f)return;
-
-  const r=new FileReader();
-
-  r.onload=async()=>{
-    try{
-      const backup=JSON.parse(r.result);
-
-      if(!backup || typeof backup!=='object'){
-        throw new Error('Ongeldige rugsteun.');
-      }
-
-      if(!sb){
-        data=backup;
-        save();
-        render();
-        alert('Rugsteun herstel op hierdie toestel. Supabase is nie gekoppel nie.');
-        return;
-      }
-
-      if(!currentUser){
-        alert('Meld eers as Admin aan voordat jy die rugsteun na die wolk laai.');
-        return;
-      }
-
-      const winners=Array.isArray(backup.winners)?backup.winners:[];
-      const events=Array.isArray(backup.events)?backup.events:[];
-      const results=Array.isArray(backup.results)?backup.results:[];
-      const docs=Array.isArray(backup.docs)?backup.docs:[];
-      const info=backup.info||{};
-
-      let count=0;
-
-      for(const x of winners){
-        const {error}=await sb.from('weekly_winners').upsert({
-          id:x.id||crypto.randomUUID(),
-          week:x.week||'',
-          race:x.race||'',
-          name:x.name||'',
-          club:x.club||'',
-          date:x.date||null,
-          image_url:x.image||'',
-          caption:x.caption||''
-        });
-        if(error)throw error;
-        count++;
-      }
-
-      for(const x of events){
-        const {error}=await sb.from('events').upsert({
-          id:x.id||crypto.randomUUID(),
-          title:x.title||'',
-          date:x.date||null,
-          location:x.location||'',
-          description:x.description||'',
-          images:Array.isArray(x.images)?x.images:[]
-        });
-        if(error)throw error;
-        count++;
-      }
-
-      for(const x of results){
-        const {error}=await sb.from('results').upsert({
-          id:x.id||crypto.randomUUID(),
-          title:x.title||'',
-          category:x.category||'WPU',
-          date:x.date||null,
-          pdf_url:x.url||''
-        });
-        if(error)throw error;
-        count++;
-      }
-
-      for(const x of docs){
-        const {error}=await sb.from('documents').upsert({
-          id:x.id||crypto.randomUUID(),
-          title:x.title||'',
-          type:x.type||'info',
-          date:x.date||null,
-          url:x.url||'',
-          note:x.note||''
-        });
-        if(error)throw error;
-        count++;
-      }
-
-      const {error:infoError}=await sb.from('wpu_info').upsert({
-        id:1,
-        about:info.about||'',
-        contacts:info.contacts||'',
-        management:info.management||'',
-        constitution:info.constitution||'',
-        updated_at:new Date().toISOString()
-      });
-
-      if(infoError)throw infoError;
-
-      await cloudLoad();
-      save();
-      render();
-
-      alert(
-        'Rugsteun suksesvol na Supabase gelaai.\n\n' +
-        count +
-        ' inhoud-items is gesinkroniseer.\n\n' +
-        Alle fone en rekenaars wat die LIVE app gebruik kan nou dieselfde data sien.'
-      );
-
-    }catch(err){
-      console.error(err);
-      alert('Rugsteun kon nie na Supabase gelaai word nie:\n\n'+(err.message||err));
-    }
-  };
-
-  r.readAsText(f);
+ const f=e.target.files[0];if(!f)return;
+ const r=new FileReader();
+ r.onload=async()=>{
+  try{
+   const parsed=JSON.parse(r.result);
+   const incoming=parsed&&parsed.data?parsed.data:parsed;
+   if(!incoming||!Array.isArray(incoming.winners)||!Array.isArray(incoming.events)||!Array.isArray(incoming.results)||!Array.isArray(incoming.docs)||!incoming.info)throw new Error('Die rugsteunformaat is ongeldig.');
+   if(sb&&!currentUser)throw new Error('Meld eers as Admin aan voordat jy ’n rugsteun na die wolk herstel.');
+   data={winners:incoming.winners||[],events:incoming.events||[],results:incoming.results||[],docs:incoming.docs||[],info:incoming.info||{about:'',contacts:'',management:'',constitution:''}};
+   if(sb){
+    const cloudUpsert=async(table,row)=>{const {error}=await sb.from(table).upsert(row,{onConflict:'id'});if(error)throw error};
+    for(const x of data.winners)await cloudUpsert('weekly_winners',{id:x.id,week:x.week,race:x.race,name:x.name,club:x.club||'',date:x.date||null,image_url:x.image||'',caption:x.caption||''});
+    for(const x of data.events)await cloudUpsert('events',{id:x.id,title:x.title,date:x.date||null,location:x.location||'',description:x.description||'',images:x.images||[]});
+    for(const x of data.results)await cloudUpsert('results',{id:x.id,title:x.title,category:x.category,date:x.date||null,pdf_url:x.url||''});
+    for(const x of data.docs)await cloudUpsert('documents',{id:x.id,title:x.title,type:x.type,date:x.date||null,url:x.url||'',note:x.note||''});
+    const {error:ie}=await sb.from('wpu_info').upsert({id:1,...data.info,updated_at:new Date().toISOString()},{onConflict:'id'});
+    if(ie)throw ie;
+    await cloudLoad();
+   }
+   save();render();alert('Rugsteun suksesvol herstel en met die wolk gesinkroniseer.');
+  }catch(err){alert(err.message||'Ongeldige rugsteun.')}
+  e.target.value='';
+ };
+ r.readAsText(f);
 }
 function resetDemo(){if(confirm('Herstel demo-inhoud? Jou huidige plaaslike data word vervang.')){localStorage.removeItem('wpu_data');data=seed;render()}}
 async function refreshLive(){if(!sb)return;await cloudLoad();render()}
-async function openPdf(url,title='PDF'){if(!url)return;try{if(url.startsWith('data:')){const parts=url.split(',');const bin=atob(parts[1]||'');const bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));setTimeout(()=>URL.revokeObjectURL(url),600000)}if(!/^https?:|^blob:/.test(url)){alert('Die PDF-skakel is ongeldig. Laai die PDF weer in by Admin.');return}window.open(url,'_blank','noopener,noreferrer')}catch(e){console.error(e);alert('Die PDF kon nie oopgemaak word nie. Gebruik “Open direk” indien jou foon se PDF-leser dit vereis.')}} 
+async function openPdf(url,title='PDF'){
+ if(!url)return;
+ try{
+  if(url.startsWith('data:')){
+   const parts=url.split(','),bin=atob(parts[1]||''),bytes=new Uint8Array(bin.length);
+   for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+   url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+   setTimeout(()=>URL.revokeObjectURL(url),600000);
+  }
+  if(!/^https?:|^blob:/.test(url)){alert('Die PDF-skakel is ongeldig. Laai die PDF weer in by Admin.');return}
+  const w=window.open(url,'_blank');
+  if(!w){
+   const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.click();
+  }
+ }catch(e){console.error(e);alert('Die PDF kon nie oopgemaak word nie. Tik “Open direk” om die foon se PDF-leser te gebruik.')}
+} 
 if(sb){sb.auth.getUser().then(({data:r})=>{currentUser=r.user||null;return cloudLoad()}).then(()=>render()).catch(()=>render())}else render(); if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{}); setInterval(()=>{if(sb)refreshLive().catch(()=>{})},60000);
