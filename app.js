@@ -394,6 +394,30 @@ function adminRow(type,id,title,fn){
 
 async function requireAdmin(){
   if(!sb) throw new Error('Supabase is nie gekoppel nie.');
+
+  // currentUser is only UI state. For an RLS-protected write we must
+  // confirm that the Supabase client actually has a live Auth session.
+  const {data:sessionData,error:sessionError}=await sb.auth.getSession();
+  if(sessionError) throw sessionError;
+
+  let session=sessionData?.session||null;
+  if(!session){
+    const {data:userData,error:userError}=await sb.auth.getUser();
+    if(userError||!userData?.user){
+      throw new Error('Geen aktiewe Supabase Admin-sessie nie. Teken asseblief weer aan.');
+    }
+    currentUser=userData.user;
+  }else{
+    currentUser=session.user;
+  }
+
+  // Refresh the token when Supabase reports that the session is expiring.
+  if(session && session.expires_at && (session.expires_at*1000-Date.now())<60000){
+    const {data:refreshData,error:refreshError}=await sb.auth.refreshSession();
+    if(refreshError) throw refreshError;
+    if(refreshData?.session) currentUser=refreshData.session.user;
+  }
+
   if(!currentUser) throw new Error('Teken eers as admin aan.');
 }
 
@@ -484,6 +508,16 @@ async function loginAdmin(){
   const {data:res,error}=await sb.auth.signInWithPassword({email,password});
   if(error){alert(error.message);return;}
   currentUser=res.user;
+
+  const {data:sessionData,error:sessionError}=await sb.auth.getSession();
+  if(sessionError || !sessionData?.session){
+    currentUser=null;
+    await sb.auth.signOut();
+    alert('Aanmelding het gewerk, maar Supabase kon nie die sessie bevestig nie. Probeer asseblief weer.');
+    render();
+    return;
+  }
+
   await cloudLoad({forceEmpty:false});
   alert('Admin aangemeld.');
   render();
@@ -594,16 +628,43 @@ const deleteResult=id=>deleteFrom('results',id,'die uitslag');
 const deleteDoc=id=>deleteFrom('documents',id,'die dokument');
 
 async function openPdf(url,title='PDF'){
-  if(!url){alert('Geen PDF-skakel beskikbaar nie.');return;}
-  const u=String(url);
-  /* Open directly. This is more reliable on phones than an async popup. */
-  const a=document.createElement('a');
-  a.href=u;
-  a.target='_blank';
-  a.rel='noopener noreferrer';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  if(!url){
+    alert('Geen PDF-skakel beskikbaar nie.');
+    return;
+  }
+
+  try{
+    let u=String(url).trim();
+    if(!u) throw new Error('Leë PDF-skakel.');
+
+    // Older backups may contain a PDF as a data URL.
+    if(u.startsWith('data:application/pdf')){
+      const parts=u.split(',');
+      const bin=atob(parts[1]||'');
+      const bytes=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+      u=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+      setTimeout(()=>URL.revokeObjectURL(u),10*60*1000);
+    }
+
+    if(!/^https?:|^blob:|^data:/.test(u)){
+      throw new Error('Die PDF-skakel is ongeldig.');
+    }
+
+    // Use a normal anchor rather than window.open(): this works more reliably
+    // with Android/iPhone browsers and installed PWAs.
+    const a=document.createElement('a');
+    a.href=u;
+    a.target='_blank';
+    a.rel='noopener noreferrer';
+    a.setAttribute('aria-label',`Open ${title||'PDF'}`);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }catch(e){
+    console.error('PDF open error:',e);
+    alert('Die PDF kon nie oopgemaak word nie. Gebruik “Open direk” of laai die PDF weer in by Admin.');
+  }
 }
 
 function downloadBackup(){
@@ -627,37 +688,66 @@ function downloadBackup(){
 async function restoreBackup(input){
   const file=input?.files?.[0];
   if(!file) return;
+
   try{
+    restoreInProgress=true;
     await requireAdmin();
+
     const text=await file.text();
     const parsed=JSON.parse(text);
     const incoming=normalizeData(parsed);
+
     const count=incoming.winners.length+incoming.events.length+incoming.results.length+incoming.docs.length;
     if(!confirm(`Herstel ${count} inhoud-items vanaf hierdie backup?`)) return;
 
-    /* Upsert keeps backup IDs and avoids creating duplicates. */
+    // Confirm the actual Supabase Auth session immediately before protected writes.
+    await requireAdmin();
+
     for(const w of incoming.winners){
       await cloudUpsert('weekly_winners',{
-        id:w.id,week:w.week||'',race:w.race||'',name:w.name||'',club:w.club||null,
-        date:w.date||null,image_url:w.image||'',caption:w.caption||''
+        id:w.id,
+        week:w.week||'',
+        race:w.race||'',
+        name:w.name||'',
+        club:w.club||null,
+        date:w.date||null,
+        image_url:w.image||'',
+        caption:w.caption||''
       });
     }
+
     for(const e of incoming.events){
       await cloudUpsert('events',{
-        id:e.id,title:e.title||'',date:e.date||null,location:e.location||'',
-        description:e.description||'',images:Array.isArray(e.images)?e.images:[]
+        id:e.id,
+        title:e.title||'',
+        date:e.date||null,
+        location:e.location||'',
+        description:e.description||'',
+        images:Array.isArray(e.images)?e.images:[]
       });
     }
+
     for(const r of incoming.results){
       await cloudUpsert('results',{
-        id:r.id,title:r.title||'',category:r.category||'WPU',date:r.date||null,pdf_url:r.url||''
+        id:r.id,
+        title:r.title||'',
+        category:r.category||'WPU',
+        date:r.date||null,
+        pdf_url:r.url||''
       });
     }
+
     for(const d of incoming.docs){
       await cloudUpsert('documents',{
-        id:d.id,title:d.title||'',type:d.type||'yearbook',date:d.date||null,url:d.url||'',note:d.note||''
+        id:d.id,
+        title:d.title||'',
+        type:d.type||'yearbook',
+        date:d.date||null,
+        url:d.url||'',
+        note:d.note||''
       });
     }
+
     await cloudUpsert('wpu_info',{
       id:1,
       about:incoming.info.about||'',
@@ -667,13 +757,39 @@ async function restoreBackup(input){
       updated_at:new Date().toISOString()
     });
 
+    // Only after all writes have succeeded do we replace the visible data
+    // with the cloud copy. A failed restore therefore cannot wipe the app.
     const ok=await cloudLoad({forceEmpty:true});
-    if(!ok) throw new Error('Die data is gestoor, maar kon nie daarna geverifieer word nie.');
-    alert('Backup is suksesvol na Supabase herstel en geverifieer.');
+    if(!ok) throw new Error('Die data is gestoor, maar Supabase kon dit nie daarna bevestig nie.');
+
+    const expected={
+      winners:incoming.winners.length,
+      events:incoming.events.length,
+      results:incoming.results.length,
+      docs:incoming.docs.length
+    };
+    const actual={
+      winners:data.winners.length,
+      events:data.events.length,
+      results:data.results.length,
+      docs:data.docs.length
+    };
+
+    if(expected.winners!==actual.winners ||
+       expected.events!==actual.events ||
+       expected.results!==actual.results ||
+       expected.docs!==actual.docs){
+      throw new Error('Supabase het nie dieselfde aantal rekords as die backup teruggestuur nie. Die herstel is nie as volledig bevestig nie.');
+    }
+
+    save();
     render();
+    alert('Backup is suksesvol na Supabase herstel en geverifieer.');
   }catch(e){
-    alert('Backup herstel het misluk: '+e.message);
+    console.error('Backup restore error:',e);
+    alert('Backup herstel het misluk: '+(e.message||e));
   }finally{
+    restoreInProgress=false;
     if(input) input.value='';
   }
 }
@@ -714,11 +830,20 @@ if(sb){
 render();
 
 /* Keep the app current, but do not wipe useful local data when cloud is empty. */
+let restoreInProgress=false;
+
 setInterval(async()=>{
-  if(sb && document.visibilityState!=='hidden'){
-    const before=JSON.stringify(data);
-    const ok=await cloudLoad({forceEmpty:false});
-    if(ok && JSON.stringify(data)!==before) render();
+  if(sb && document.visibilityState!=='hidden' && !restoreInProgress){
+    try{
+      const {data:sessionData}=await sb.auth.getSession();
+      if(!sessionData?.session) return;
+
+      const before=JSON.stringify(data);
+      const ok=await cloudLoad({forceEmpty:false});
+      if(ok && JSON.stringify(data)!==before) render();
+    }catch(e){
+      console.warn('Background cloud refresh skipped:',e);
+    }
   }
 },60000);
 
