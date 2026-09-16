@@ -1,1 +1,23 @@
-{"name":"WPU 2026","short_name":"WPU 2026","start_url":"./","display":"standalone","background_color":"#f7f5ef","theme_color":"#0d5c3b","icons":[{"src":"assets/wpu-logo.jpg","sizes":"192x192","type":"image/jpeg"},{"src":"assets/wpu-logo.jpg","sizes":"512x512","type":"image/jpeg"}]}
+{
+  "name": "WPU 2026",
+  "short_name": "WPU 2026",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f5ef",
+  "theme_color": "#0d5c3b",
+  "description": "Westelike Posduif Unie 2026 digitale app.",
+  "icons": [
+    {
+      "src": "assets/wpu-logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "assets/wpu-logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+WPU 2026 APP - NUWE WEERGAWE
+
+1. Vervang jou huidige app.js in GitHub met die nuwe app.js.
+2. Vervang jou huidige sw.js met die nuwe sw.js.
+3. Vervang manifest.webmanifest met die nuwe manifest.webmanifest.
+4. Moenie config.js verander nie.
+5. Moenie Supabase se tabelle of policies verander nie.
+6. Commit changes op main. Render sal daarna outomaties herdeploy.
+7. Wag tot Render sê Live.
+8. Maak die Render-skakel op jou rekenaar oop en druk Ctrl+F5.
+9. Op 'n foon: maak die Render-skakel oop en installeer die app vanaf Chrome (Android) of Safari (iPhone).
+
+Belangrik:
+- Hierdie weergawe moet nie plaaslike inhoud uitvee net omdat Supabase tydelik leeg/ontoeganklik is nie.
+- Backup/restore gebruik die bestaande Supabase-tabelle.
+- PDF's word direk met 'n gewone skakel in 'n nuwe venster/oortjie oopgemaak, wat beter op fone werk.
+- sw.js is na v5 verander om ou JavaScript-cache te vermy.
+- config.js en die Supabase publishable key bly soos dit is.
