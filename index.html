@@ -17,7 +17,152 @@ h2{margin:28px 0 13px}.grid{display:grid;grid-template-columns:repeat(auto-fit,m
 .pdf{display:flex;align-items:center;gap:12px;padding:13px;background:white;border:1px solid var(--line);border-radius:14px;margin-bottom:10px}.pdf .ico{font-size:26px}.pdf a{margin-left:auto;text-decoration:none;background:var(--green);color:white;padding:8px 12px;border-radius:10px;font-weight:700}.pdf .btn{margin-left:auto}.pdfmodal{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:12px}.pdfbox{width:min(1100px,100%);height:min(92vh,900px);background:white;border-radius:16px;overflow:hidden;display:flex;flex-direction:column}.pdfhead{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;justify-content:space-between}.pdfhead .actions{margin:0}.pdfbox iframe{width:100%;height:100%;border:0;background:#ddd}
 .info{background:white;border:1px solid var(--line);border-radius:16px;padding:18px;white-space:pre-wrap}.notice{padding:12px 14px;background:#fff8dd;border:1px solid #e8d68e;border-radius:12px;margin:12px 0}.empty{padding:35px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px}
 .admin{background:white;border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:16px}.admin h3{margin-top:0}.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.field{display:flex;flex-direction:column;gap:5px}.field label{font-weight:750;font-size:13px}.field input,.field textarea,.field select{font:inherit;border:1px solid #cfd8d3;border-radius:10px;padding:10px;background:#fff}.field textarea{min-height:90px;resize:vertical}.btn{border:0;background:var(--green);color:#fff;padding:10px 14px;border-radius:10px;font-weight:800;cursor:pointer}.btn.secondary{background:#e9eeeb;color:var(--dark)}.btn.danger{background:var(--danger)}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.status{padding:10px;border-radius:10px;background:#edf7f1;margin-top:10px}.hidden{display:none!important}.small{font-size:12px;color:var(--muted)}
+/* PROFESSIONELE ADMIN UITLEG */
 
+.admin-card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:24px;
+  margin:0 0 22px;
+  box-shadow:0 5px 20px #17362b0b;
+}
+
+.admin-card h2{
+  margin:0 0 20px;
+  padding-bottom:12px;
+  border-bottom:2px solid #edf1ee;
+  font-size:20px;
+}
+
+.formgrid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  column-gap:28px;
+  row-gap:22px;
+  margin-bottom:20px;
+}
+
+.formgrid label,
+.admin-card>label{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  min-width:0;
+  font-weight:750;
+  font-size:14px;
+}
+
+.formgrid input,
+.formgrid select,
+.admin-card input,
+.admin-card textarea,
+.admin-card select{
+  width:100%;
+  min-height:46px;
+  padding:11px 13px;
+  border:1px solid #cbd5cf;
+  border-radius:11px;
+  background:#fff;
+  color:var(--dark);
+  font:inherit;
+  outline:none;
+}
+
+.admin-card textarea{
+  min-height:120px;
+  resize:vertical;
+  line-height:1.45;
+}
+
+.formgrid input:focus,
+.formgrid select:focus,
+.admin-card input:focus,
+.admin-card textarea:focus,
+.admin-card select:focus{
+  border-color:var(--green);
+  box-shadow:0 0 0 3px #0d5c3b18;
+}
+
+.admin-card input[type=file]{
+  padding:8px;
+}
+
+.admin-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  padding:16px;
+  margin:0 0 24px;
+  background:#edf4f0;
+  border:1px solid #d8e5de;
+  border-radius:15px;
+}
+
+.admin-actions .btn,
+.admin-actions .filebtn{
+  margin:0;
+}
+
+.admin-card .btn{
+  min-height:44px;
+  padding:11px 18px;
+}
+
+.admin-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  padding:14px 0;
+  border-top:1px solid var(--line);
+}
+
+.admin-row>span{
+  min-width:0;
+  line-height:1.4;
+}
+
+.admin-row .btn{
+  flex:0 0 auto;
+}
+
+.filebtn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+
+@media(max-width:700px){
+  .formgrid{
+    grid-template-columns:1fr;
+    row-gap:18px;
+  }
+
+  .admin-card{
+    padding:18px;
+    margin-bottom:18px;
+  }
+
+  .admin-actions{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:10px;
+  }
+
+  .admin-actions .btn,
+  .admin-actions .filebtn{
+    width:100%;
+  }
+
+  .admin-row{
+    align-items:flex-start;
+  }
+
+  .admin-row>span{
+    overflow-wrap:anywhere;
+  }
+}
 .event-card .event-img{cursor:pointer}
 .event-img{display:block;object-fit:cover;object-position:center;width:100%;aspect-ratio:16/10;min-height:180px}
 .winner-img{display:block;object-fit:contain;object-position:center;width:100%;aspect-ratio:4/3;padding:10px;background:#f4f6f5}
