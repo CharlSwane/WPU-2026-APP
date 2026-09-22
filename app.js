@@ -469,7 +469,12 @@ async function cloudLoad(options={}){
     const errors = [w,e,r,d,i].filter(x=>x.error);
     if(errors.length){
       cloudOnline=false;
-      console.warn('Cloud load error:',errors);
+      console.warn('CLOUD LOAD ERROR DETAILS:', errors.map(x => ({
+        message: x.error?.message,
+        code: x.error?.code,
+        details: x.error?.details,
+        hint: x.error?.hint
+      })));
       return false;
     }
 
