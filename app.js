@@ -689,7 +689,43 @@ function downloadBackup(){
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   }catch(e){alert('Backup kon nie geskep word nie: '+e.message);}
 }
+function restoreId(table, oldId){
+  const id = String(oldId ?? '').trim();
 
+  // Behou bestaande geldige UUID's
+  if(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)){
+    return id;
+  }
+
+  // Verander ou IDs soos w1, w2, e1, r1, d1
+  // na 'n geldige, stabiele UUID.
+  const source = `${table}:${id}`;
+
+  let h1 = 0x811c9dc5;
+  let h2 = 0x9e3779b9;
+  let h3 = 0x85ebca6b;
+  let h4 = 0xc2b2ae35;
+
+  for(let i=0;i<source.length;i++){
+    const c=source.charCodeAt(i);
+
+    h1=Math.imul(h1^c,16777619);
+    h2=Math.imul(h2^c,2246822519);
+    h3=Math.imul(h3^c,3266489917);
+    h4=Math.imul(h4^c,668265263);
+  }
+
+  const hex=n=>(n>>>0).toString(16).padStart(8,'0');
+
+  let x=hex(h1)+hex(h2)+hex(h3)+hex(h4);
+
+  x=x.slice(0,12)+'4'+x.slice(13,16)+
+    ((parseInt(x.slice(16,18),16)&0x3f)|0x80)
+      .toString(16).padStart(2,'0')+
+    x.slice(18);
+
+  return `${x.slice(0,8)}-${x.slice(8,12)}-${x.slice(12,16)}-${x.slice(16,20)}-${x.slice(20,32)}`;
+}
 async function restoreBackup(input){
   const file=input?.files?.[0];
   if(!file) return;
@@ -710,7 +746,7 @@ async function restoreBackup(input){
 
     for(const w of incoming.winners){
       await cloudUpsert('weekly_winners',{
-        id:w.id,
+        id:restoreId('weekly_winners',w.id),
         week:w.week||'',
         race:w.race||'',
         name:w.name||'',
@@ -723,7 +759,7 @@ async function restoreBackup(input){
 
     for(const e of incoming.events){
       await cloudUpsert('events',{
-        id:e.id,
+        id:restoreId('events',e.id),
         title:e.title||'',
         date:e.date||null,
         location:e.location||'',
@@ -734,7 +770,7 @@ async function restoreBackup(input){
 
     for(const r of incoming.results){
       await cloudUpsert('results',{
-        id:r.id,
+        id:restoreId('results',r.id),
         title:r.title||'',
         category:r.category||'WPU',
         date:r.date||null,
@@ -744,7 +780,7 @@ async function restoreBackup(input){
 
     for(const d of incoming.docs){
       await cloudUpsert('documents',{
-        id:d.id,
+        id:restoreId('documents',d.id),
         title:d.title||'',
         type:d.type||'yearbook',
         date:d.date||null,
