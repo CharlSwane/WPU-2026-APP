@@ -1,22 +1,21 @@
-WPU 2026 - RLS FOUT REGMAAK
+WPU 2026 – FINALE RLS REGSTELLING
 
-Die fout "new row violates row-level security policy" gebeur omdat jou Admin Auth-gebruiker nie in public.admins geregistreer is nie.
+Die Admin Auth UUID is reeds in hierdie pakket ingebou:
+11bd15b4-711a-4d04-8307-4c8c01202eb8
 
-1. Gaan na Supabase -> SQL Editor.
-2. Maak RLS-FIX.sql oop.
-3. Vervang YOUR-ADMIN-EMAIL-HERE met die presiese e-posadres waarmee jy op WPU Admin Aanmelding inteken.
-4. Run die hele SQL.
-5. Die laaste SELECT moet jou user_id en e-posadres wys.
-6. Gaan terug na die WPU app.
-7. Log uit en log weer in as Admin.
-8. Toets eers 'n nuwe uitslag.
+DOEN NET EEN KEER:
+1. Gaan na Supabase > SQL Editor.
+2. Open RLS-FIX.sql.
+3. Run die hele SQL.
+4. Log uit die WPU app en teken weer aan.
+5. Toets eers “Toets Supabase” en daarna “Laai uitslag op”.
 
-Hierdie selfde RLS-regstelling dek:
-- Weeklikse wenners
-- Byeenkomste / funksies
+Die regstelling dek:
 - Wedvlug-uitslae
-- Jaarboek / dokumente
+- Weeklikse wenners
+- Byeenkomste
+- Dokumente
 - WPU inligting
-- Foto/PDF uploads na wpu-media
+- Supabase Storage uploads (PDFs en foto's)
 
-Moenie 'n policy maak wat enige ingelogde gebruiker admin maak nie. Dit sal die sekuriteit van die admin-gedeelte breek.
+Die beleid aanvaar die spesifieke Admin UUID direk én behou die public.admins beheer.
