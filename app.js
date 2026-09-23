@@ -63,7 +63,8 @@ function normalizeData(raw){
       about: x.info?.about || seed.info.about,
       contacts: x.info?.contacts || '',
       management: x.info?.management || '',
-      constitution: x.info?.constitution || ''
+      constitution: x.info?.constitution || '',
+      constitution_url: x.info?.constitution_url || ''
     }
   };
 }
@@ -106,6 +107,7 @@ function nav(){
     ['winners','Weeklikse wenners'],
     ['results','Uitslae'],
     ['yearbook','Jaarboek 2026'],
+    ['documents','Dokumente'],
     ['events','Byeenkomste'],
     ['info','WPU Inligting'],
     ['admin','Admin']
@@ -126,7 +128,7 @@ function render(){
   nav();
   const a = document.querySelector('#app');
   if (!a) return;
-  const fn = {home:home,winners:winPage,results:resultsPage,yearbook:yearbook,events:eventsPage,info:infoPage,admin:adminPage}[page] || home;
+  const fn = {home:home,winners:winPage,results:resultsPage,yearbook:yearbook,documents:documentsPage,events:eventsPage,info:infoPage,admin:adminPage}[page] || home;
   try { fn(a); }
   catch(e) {
     console.error(e);
@@ -134,8 +136,19 @@ function render(){
   }
 }
 
+function sortByDateNewest(list){
+  return [...(list||[])].sort((a,b)=>{
+    const ad=String(a?.date||'');
+    const bd=String(b?.date||'');
+    if(ad!==bd) return bd.localeCompare(ad);
+    const ac=String(a?.created_at||'');
+    const bc=String(b?.created_at||'');
+    return bc.localeCompare(ac);
+  });
+}
+
 function home(a){
-  const ws = data.winners.slice(0,6);
+  const ws = sortByDateNewest(data.winners).slice(0,6);
   a.innerHTML = `
     <section class="hero">
       <img src="assets/wpu-logo.jpg" alt="WPU">
@@ -143,9 +156,9 @@ function home(a){
     </section>
     <h2>🏆 Weeklikse wenners</h2>
     <div class="grid">${ws.map(winnerCard).join('') || empty()}</div>
-    <h2>📊 Jongste uitslae</h2>${resultList(data.results.slice(0,5))}
+    <h2>📊 Jongste uitslae</h2>${resultList(sortByDateNewest(data.results).slice(0,5))}
     <h2>📅 Komende / onlangse byeenkomste</h2>
-    <div class="grid">${data.events.slice(0,4).map(eventCard).join('') || empty()}</div>`;
+    <div class="grid">${sortByDateNewest(data.events).slice(0,4).map(eventCard).join('') || empty()}</div>`;
 }
 
 function winnerCard(w){
@@ -163,7 +176,7 @@ function winnerCard(w){
 
 function winPage(a){
   a.innerHTML = `<h1>Weeklikse wenners</h1>
-    <div class="grid">${data.winners.map(winnerCard).join('') || empty()}</div>`;
+    <div class="grid">${sortByDateNewest(data.winners).map(winnerCard).join('') || empty()}</div>`;
 }
 
 function chips(){
@@ -176,7 +189,7 @@ function chips(){
 function filterCat(c){ cat=c; render(); }
 
 function resultsPage(a){
-  const rs = data.results.filter(r => cat==='ALL' || r.category===cat);
+  const rs = sortByDateNewest(data.results.filter(r => cat==='ALL' || r.category===cat));
   a.innerHTML = `<h1>Uitslae</h1>${chips()}${resultList(rs) || empty()}`;
 }
 
@@ -194,7 +207,7 @@ function resultList(rs){
 }
 
 function yearbook(a){
-  const docs = data.docs.filter(d => d.type==='yearbook');
+  const docs = sortByDateNewest(data.docs.filter(d => d.type==='yearbook'));
   a.innerHTML = `<h1>Jaarboek 2026</h1>${docs.length ? docs.map(docCard).join('') : empty('Laai die 2026 jaarboek in by Admin.')}`;
 }
 
@@ -209,9 +222,14 @@ function docCard(d){
   </div>`;
 }
 
+function documentsPage(a){
+  const docs = sortByDateNewest(data.docs.filter(d => d.type!=='yearbook' && d.type!=='constitution'));
+  a.innerHTML = `<h1>Dokumente</h1>${docs.length ? docs.map(docCard).join('') : empty('Geen dokumente is tans beskikbaar nie.')}`;
+}
+
 function eventsPage(a){
   a.innerHTML = `<h1>Byeenkomste & Funksies</h1>
-    <div class="grid">${data.events.map(eventCard).join('') || empty()}</div>`;
+    <div class="grid">${sortByDateNewest(data.events).map(eventCard).join('') || empty()}</div>`;
 }
 
 function eventCard(e){
@@ -268,7 +286,9 @@ function infoPage(a){
     <section class="info"><h2>Oor die WPU</h2><div>${nl2br(data.info.about)}</div>
     <h2>Kontak</h2><div>${nl2br(data.info.contacts)}</div>
     <h2>Bestuur</h2><div>${nl2br(data.info.management)}</div>
-    <h2>Konstitusie</h2><div>${nl2br(data.info.constitution)}</div></section>`;
+    <h2>Konstitusie</h2><div>${nl2br(data.info.constitution)}</div>
+    ${data.info.constitution_url ? `<div class="actions"><button class="btn" type="button" onclick='openPdf(${JSON.stringify(data.info.constitution_url)},"WPU Konstitusie")'>Maak Konstitusie oop</button><a class="btn secondary" href="${esc(data.info.constitution_url)}" target="_blank" rel="noopener">Open direk</a></div>` : ''}
+    </section>`;
 }
 
 function nl2br(s){
@@ -277,146 +297,124 @@ function nl2br(s){
 
 function adminPage(a){
   if(!sb){
-    a.innerHTML = `<h1>Admin</h1><div class="notice danger-note"><b>Supabase is nie gekoppel nie.</b><br>Kontroleer config.js.</div>`;
+    a.innerHTML = `<h1>Admin</h1><div class="empty">Supabase is nie gekoppel nie. Kontroleer config.js.</div>`;
     return;
   }
   if(!currentUser){
-    a.innerHTML = `<div class="admin-wrap">
-      <section class="admin-card login-card">
-        <div class="admin-card-head"><div><span class="eyebrow">WPU 2026</span><h2>Admin aanmelding</h2><p class="small">Teken aan om inhoud na Supabase te laai.</p></div></div>
-        <div class="formgrid two">
-          <div class="field"><label for="ae">E-posadres</label><input id="ae" type="email" autocomplete="username" placeholder="admin e-pos"></div>
-          <div class="field"><label for="ap">Wagwoord</label><input id="ap" type="password" autocomplete="current-password" placeholder="wagwoord"></div>
-        </div>
-        <div class="actions"><button class="btn" onclick="loginAdmin()">Teken aan</button></div>
-      </section>
-    </div>`;
+    a.innerHTML = `<h1>Admin</h1>
+      <section class="admin-card">
+        <h2>Admin aanmelding</h2>
+        <label>E-posadres<input id="ae" type="email" autocomplete="username"></label>
+        <label>Wagwoord<input id="ap" type="password" autocomplete="current-password"></label>
+        <button class="btn" onclick="loginAdmin()">Teken aan</button>
+      </section>`;
     return;
   }
 
-  const cloudLabel = cloudOnline ? 'Supabase gekoppel' : 'Supabase verbinding word getoets...';
-  a.innerHTML = `<div class="admin-wrap">
-    <div class="admin-topbar">
-      <div><span class="eyebrow">WPU 2026</span><h1>Administrasie</h1><p class="small">Aangemeld as <b>${esc(currentUser.email||'')}</b></p><p class="small">Supabase gebruiker: <code>${esc(currentUser.id||'')}</code></p></div>
-      <div class="cloud-badge ${cloudOnline?'ok':'wait'}"><span class="dot"></span>${cloudLabel}</div>
+  a.innerHTML = `<h1>Admin</h1>
+    <p><b>Aangemeld:</b> ${esc(currentUser.email||'')}</p>
+    <div class="admin-actions">
+      <button class="btn" onclick="logoutAdmin()">Teken uit</button>
+      <button class="btn secondary" onclick="refreshCloud()">Herlaai uit Supabase</button>
+      <button class="btn secondary" onclick="downloadBackup()">Laai backup af</button>
+      <label class="btn secondary filebtn">Herstel backup
+        <input type="file" accept=".json,application/json" onchange="restoreBackup(this)" hidden>
+      </label>
     </div>
-
-    <section class="admin-card admin-tools">
-      <div class="admin-card-head"><div><h2>Beheer</h2><p class="small">Laai data vanaf Supabase, maak 'n backup, of herstel 'n vorige backup.</p></div></div>
-      <div class="actions">
-        <button class="btn" onclick="refreshCloud()">↻ Herlaai uit Supabase</button>
-        <button class="btn secondary" onclick="testCloud()">✓ Toets Supabase</button>
-        <button class="btn secondary" onclick="downloadBackup()">↓ Laai backup af</button>
-        <label class="btn secondary filebtn">↑ Herstel backup
-          <input type="file" accept=".json,application/json" onchange="restoreBackup(this)" hidden>
-        </label>
-        <button class="btn danger" onclick="logoutAdmin()">Teken uit</button>
-      </div>
-      <div id="cloud-test-result" class="small status hidden"></div>
-    </section>
-
     ${adminWinnerForm()}
     ${adminEventForm()}
     ${adminResultForm()}
     ${adminDocForm()}
     ${adminInfoForm()}
-    ${adminList()}
-  </div>`;
+    ${adminList()}`;
 }
 
 function adminWinnerForm(){
-  return `<section class="admin-card">
-    <div class="admin-card-head"><div><span class="eyebrow">01</span><h2>Weeklikse wenner</h2><p class="small">Voeg 'n wenner en foto by. Die foto word in Supabase Storage gestoor.</p></div></div>
+  return `<section class="admin-card"><h2>Weeklikse wenner</h2>
     <div class="formgrid">
-      <div class="field"><label for="w_week">Week</label><input id="w_week" placeholder="bv. Week 1"></div>
-      <div class="field"><label for="w_race">Wedvlug</label><input id="w_race" placeholder="Wedvlugnaam"></div>
-      <div class="field"><label for="w_name">Naam</label><input id="w_name" placeholder="Duif / lid se naam"></div>
-      <div class="field"><label for="w_club">Klub</label><input id="w_club" placeholder="Klub"></div>
-      <div class="field"><label for="w_date">Datum</label><input id="w_date" type="date"></div>
-      <div class="field"><label for="w_file">Foto</label><input id="w_file" type="file" accept="image/*"></div>
-      <div class="field"><label for="w_image">Foto URL (opsioneel)</label><input id="w_image" placeholder="https://..."></div>
-      <div class="field"><label for="w_caption">Byskrif</label><input id="w_caption" placeholder="Opsioneel"></div>
+      <label>Week<input id="w_week"></label>
+      <label>Wedvlug<input id="w_race"></label>
+      <label>Naam<input id="w_name"></label>
+      <label>Klub<input id="w_club"></label>
+      <label>Datum<input id="w_date" type="date"></label>
+      <label>Foto<input id="w_file" type="file" accept="image/*"></label>
+      <label>Foto URL<input id="w_image"></label>
+      <label>Byskrif<input id="w_caption"></label>
     </div>
-    <div class="actions"><button class="btn" onclick="addWinner()">Stoor wenner</button></div>
+    <button class="btn" onclick="addWinner()">Stoor wenner</button>
   </section>`;
 }
 
 function adminEventForm(){
-  return `<section class="admin-card">
-    <div class="admin-card-head"><div><span class="eyebrow">02</span><h2>Byeenkoms / funksie</h2><p class="small">Voeg die hoof-foto en enige ekstra foto's by.</p></div></div>
+  return `<section class="admin-card"><h2>Byeenkoms / funksie</h2>
     <div class="formgrid">
-      <div class="field"><label for="e_title">Naam</label><input id="e_title" placeholder="Naam van funksie"></div>
-      <div class="field"><label for="e_date">Datum</label><input id="e_date" type="date"></div>
-      <div class="field"><label for="e_location">Plek</label><input id="e_location" placeholder="Plek"></div>
-      <div class="field"><label for="e_file">Hooffoto</label><input id="e_file" type="file" accept="image/*"></div>
-      <div class="field"><label for="e_image">Hooffoto URL</label><input id="e_image" placeholder="https://..."></div>
-      <div class="field"><label for="e_files">Meer foto's</label><input id="e_files" type="file" accept="image/*" multiple></div>
+      <label>Naam<input id="e_title"></label>
+      <label>Datum<input id="e_date" type="date"></label>
+      <label>Plek<input id="e_location"></label>
+      <label>Hooffoto<input id="e_file" type="file" accept="image/*"></label>
+      <label>Hooffoto URL<input id="e_image"></label>
+      <label>Meer foto’s<input id="e_files" type="file" accept="image/*" multiple></label>
     </div>
-    <div class="field"><label for="e_desc">Beskrywing / Google Maps skakel</label><textarea id="e_desc" placeholder="Beskrywing..."></textarea></div>
-    <div class="actions"><button class="btn" onclick="addEvent()">Stoor byeenkoms</button></div>
+    <label>Beskrywing / Google Maps skakel<textarea id="e_desc"></textarea></label>
+    <button class="btn" onclick="addEvent()">Stoor byeenkoms</button>
   </section>`;
 }
 
 function adminResultForm(){
-  return `<section class="admin-card">
-    <div class="admin-card-head"><div><span class="eyebrow">03</span><h2>Wedvlug-uitslae</h2><p class="small">Kies 'n PDF vanaf die rekenaar. Dit word eers na Supabase Storage gelaai en daarna as 'n uitslag gestoor.</p></div></div>
+  return `<section class="admin-card"><h2>Uitslag PDF</h2>
     <div class="formgrid">
-      <div class="field"><label for="r_title">Titel</label><input id="r_title" placeholder="bv. 129 Richmond"></div>
-      <div class="field"><label for="r_category">Kategorie</label><select id="r_category">${cats.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>
-      <div class="field"><label for="r_date">Datum</label><input id="r_date" type="date"></div>
-      <div class="field file-field"><label for="r_file">PDF lêer</label><input id="r_file" type="file" accept="application/pdf,.pdf"></div>
-      <div class="field"><label for="r_url">PDF URL (opsioneel)</label><input id="r_url" placeholder="https://...pdf"></div>
+      <label>Titel<input id="r_title"></label>
+      <label>Kategorie<select id="r_category">${cats.map(c=>`<option>${c}</option>`).join('')}</select></label>
+      <label>Datum<input id="r_date" type="date"></label>
+      <label>PDF lêer<input id="r_file" type="file" accept="application/pdf,.pdf"></label>
+      <label>PDF URL<input id="r_url"></label>
     </div>
-    <div class="notice">Gebruik óf <b>PDF lêer</b> óf <b>PDF URL</b>. As jy 'n lêer kies, laai die program dit outomaties na Supabase op.</div>
-    <div class="actions"><button class="btn" onclick="addResult()">↑ Laai uitslag op</button></div>
+    <button class="btn" onclick="addResult()">Stoor uitslag</button>
   </section>`;
 }
 
 function adminDocForm(){
-  return `<section class="admin-card">
-    <div class="admin-card-head"><div><span class="eyebrow">04</span><h2>Jaarboek / WPU dokument</h2></div></div>
+  return `<section class="admin-card"><h2>Dokumente</h2>
+    <p class="small">Gebruik hierdie afdeling vir inskrywingslyste, kennisgewings, vorms, jaarboek-PDF's en ander WPU-dokumente.</p>
     <div class="formgrid">
-      <div class="field"><label for="d_title">Titel</label><input id="d_title" placeholder="Dokument se naam"></div>
-      <div class="field"><label for="d_type">Tipe</label><select id="d_type"><option value="yearbook">Jaarboek</option><option value="info">Inligting</option></select></div>
-      <div class="field"><label for="d_date">Datum</label><input id="d_date" type="date"></div>
-      <div class="field"><label for="d_file">PDF lêer</label><input id="d_file" type="file" accept="application/pdf,.pdf"></div>
-      <div class="field"><label for="d_url">PDF URL</label><input id="d_url" placeholder="https://...pdf"></div>
-      <div class="field"><label for="d_note">Nota</label><input id="d_note" placeholder="Opsioneel"></div>
+      <label>Titel<input id="d_title" placeholder="bv. Inskrywingslys 2026"></label>
+      <label>Tipe<select id="d_type"><option value="info">Algemene dokument</option><option value="yearbook">Jaarboek 2026</option><option value="entry">Inskrywingslys</option><option value="notice">Kennisgewing</option><option value="form">Vorm</option></select></label>
+      <label>Datum<input id="d_date" type="date"></label>
+      <label>PDF lêer<input id="d_file" type="file" accept="application/pdf,.pdf"></label>
+      <label>PDF URL<input id="d_url" placeholder="Opsioneel"></label>
+      <label>Nota<input id="d_note" placeholder="Kort beskrywing"></label>
     </div>
-    <div class="actions"><button class="btn" onclick="addDoc()">Stoor dokument</button></div>
+    <button class="btn" onclick="addDoc()">Stoor dokument</button>
   </section>`;
 }
 
 function adminInfoForm(){
-  return `<section class="admin-card">
-    <div class="admin-card-head"><div><span class="eyebrow">05</span><h2>WPU inligting</h2></div></div>
-    <div class="formgrid">
-      <div class="field full"><label for="i_about">Oor die WPU</label><textarea id="i_about">${esc(data.info.about)}</textarea></div>
-      <div class="field"><label for="i_contacts">Kontak</label><textarea id="i_contacts">${esc(data.info.contacts)}</textarea></div>
-      <div class="field"><label for="i_management">Bestuur</label><textarea id="i_management">${esc(data.info.management)}</textarea></div>
-      <div class="field full"><label for="i_constitution">Konstitusie / nota</label><textarea id="i_constitution">${esc(data.info.constitution)}</textarea></div>
+  return `<section class="admin-card"><h2>WPU inligting</h2>
+    <label>Oor die WPU<textarea id="i_about">${esc(data.info.about)}</textarea></label>
+    <label>Kontak<textarea id="i_contacts">${esc(data.info.contacts)}</textarea></label>
+    <label>Bestuur<textarea id="i_management">${esc(data.info.management)}</textarea></label>
+    <div class="constitution-upload">
+      <label>WPU Konstitusie PDF<input id="i_constitution_file" type="file" accept="application/pdf,.pdf"></label>
+      ${data.info.constitution_url ? `<div class="small">Huidige Konstitusie: <a href="${esc(data.info.constitution_url)}" target="_blank" rel="noopener">Maak oop</a></div>` : ''}
     </div>
-    <div class="actions"><button class="btn" onclick="saveInfo()">Stoor WPU inligting</button></div>
+    <label>Konstitusie nota / beskrywing<textarea id="i_constitution">${esc(data.info.constitution)}</textarea></label>
+    <button class="btn" onclick="saveInfo()">Stoor WPU inligting</button>
   </section>`;
 }
 
 function adminList(){
-  return `<section class="admin-card">
-    <div class="admin-card-head"><div><span class="eyebrow">06</span><h2>Bestaande inhoud</h2><p class="small">Hierdie lys wys wat tans vanaf Supabase gelaai is.</p></div>
-      <div class="counts"><span>${data.winners.length} wenners</span><span>${data.events.length} byeenkomste</span><span>${data.results.length} uitslae</span><span>${data.docs.length} dokumente</span></div>
-    </div>
-    <div class="admin-list">
-      ${data.winners.map(w=>adminRow('Wenner',w.id,w.name||w.race,'deleteWinner')).join('') || '<div class="small">Geen wenners.</div>'}
-      ${data.events.map(e=>adminRow('Byeenkoms',e.id,e.title,'deleteEvent')).join('')}
-      ${data.results.map(r=>adminRow('Uitslag',r.id,r.title,'deleteResult')).join('')}
-      ${data.docs.map(d=>adminRow('Dokument',d.id,d.title,'deleteDoc')).join('')}
-    </div>
+  return `<section class="admin-card"><h2>Bestaande inhoud</h2>
+    <div class="small">Wenner: ${data.winners.length} • Byeenkomste: ${data.events.length} • Uitslae: ${data.results.length} • Dokumente: ${data.docs.length}</div>
+    ${sortByDateNewest(data.winners).map(w=>adminRow('Wenner',w.id,w.name||w.race,w.date,'deleteWinner')).join('')}
+    ${sortByDateNewest(data.events).map(e=>adminRow('Byeenkoms',e.id,e.title,e.date,'deleteEvent')).join('')}
+    ${sortByDateNewest(data.results).map(r=>adminRow('Uitslag',r.id,r.title,r.date,'deleteResult')).join('')}
+    ${sortByDateNewest(data.docs).map(d=>adminRow('Dokument',d.id,d.title,d.date,'deleteDoc')).join('')}
   </section>`;
 }
 
-function adminRow(type,id,title,fn){
-  return `<div class="admin-row"><div class="admin-row-main"><span class="type-pill">${esc(type)}</span><b>${esc(title)}</b></div>
-    <button class="btn danger smallbtn" onclick='${fn}(${JSON.stringify(id)})'>Verwyder</button></div>`;
+function adminRow(type,id,title,date,fn){
+  return `<div class="admin-row"><span><b>${esc(type)}</b> — ${esc(title)}${date ? `<div class="meta">${esc(date)}</div>` : ''}</span>
+    <button class="btn danger" onclick='${fn}(${JSON.stringify(id)})'>Verwyder</button></div>`;
 }
 
 async function requireAdmin(){
@@ -446,10 +444,6 @@ async function requireAdmin(){
   }
 
   if(!currentUser) throw new Error('Teken eers as admin aan.');
-
-  // RLS writes must carry an authenticated JWT. Keep the actual UID visible in the
-  // admin area so a Supabase project/user mismatch can be diagnosed immediately.
-  window.WPU_AUTH_UID = currentUser.id || '';
 }
 
 async function uploadMedia(file){
@@ -478,11 +472,11 @@ async function cloudUpsert(table,row){
 
 function mapCloud(w,e,r,d,i){
   return {
-    winners:(w||[]).map(x=>({id:x.id,week:x.week,race:x.race,name:x.name,club:x.club,date:x.date,image:x.image_url,caption:x.caption})),
-    events:(e||[]).map(x=>({id:x.id,title:x.title,date:x.date,location:x.location,description:x.description,images:Array.isArray(x.images)?x.images:[]})),
-    results:(r||[]).map(x=>({id:x.id,title:x.title,category:x.category,date:x.date,url:x.pdf_url})),
-    docs:(d||[]).map(x=>({id:x.id,title:x.title,type:x.type,date:x.date,url:x.url,note:x.note})),
-    info:i ? {about:i.about||'',contacts:i.contacts||'',management:i.management||'',constitution:i.constitution||''} : clone(data.info)
+    winners:(w||[]).map(x=>({id:x.id,week:x.week,race:x.race,name:x.name,club:x.club,date:x.date,image:x.image_url,caption:x.caption,created_at:x.created_at})),
+    events:(e||[]).map(x=>({id:x.id,title:x.title,date:x.date,location:x.location,description:x.description,images:Array.isArray(x.images)?x.images:[],created_at:x.created_at})),
+    results:(r||[]).map(x=>({id:x.id,title:x.title,category:x.category,date:x.date,url:x.pdf_url,created_at:x.created_at})),
+    docs:(d||[]).map(x=>({id:x.id,title:x.title,type:x.type,date:x.date,url:x.url,note:x.note,created_at:x.created_at})),
+    info:i ? {about:i.about||'',contacts:i.contacts||'',management:i.management||'',constitution:i.constitution||'',constitution_url:i.constitution_url||''} : clone(data.info)
   };
 }
 
@@ -528,28 +522,6 @@ async function cloudLoad(options={}){
     cloudOnline=false;
     console.warn('Cloud load failed:',e);
     return false;
-  }
-}
-
-async function testCloud(){
-  const box=document.getElementById('cloud-test-result');
-  if(box){box.classList.remove('hidden'); box.textContent='Toets tans Supabase...';}
-  try{
-    await requireAdmin();
-    const checks = await Promise.all([
-      sb.from('weekly_winners').select('id',{count:'exact',head:true}),
-      sb.from('events').select('id',{count:'exact',head:true}),
-      sb.from('results').select('id',{count:'exact',head:true}),
-      sb.from('documents').select('id',{count:'exact',head:true}),
-      sb.from('wpu_info').select('id',{count:'exact',head:true})
-    ]);
-    const bad=checks.find(x=>x.error);
-    if(bad) throw bad.error;
-    cloudOnline=true;
-    if(box) box.innerHTML=`<b>Supabase OK.</b> Wenners: ${checks[0].count??0} • Byeenkomste: ${checks[1].count??0} • Uitslae: ${checks[2].count??0} • Dokumente: ${checks[3].count??0}`;
-  }catch(e){
-    cloudOnline=false;
-    if(box) box.innerHTML=`<b>Supabase-fout:</b> ${esc(e.message||e)}`;
   }
 }
 
@@ -625,17 +597,12 @@ async function addResult(){
     await requireAdmin();
     let url=val('r_url');
     const file=document.getElementById('r_file')?.files?.[0];
-    if(file){
-      const isPdf = file.type==='application/pdf' || /\.pdf$/i.test(file.name);
-      if(!isPdf) throw new Error('Kies asseblief slegs ’n PDF-lêer.');
-      if(file.size > 25*1024*1024) throw new Error('Die PDF is groter as 25 MB.');
-      url=await uploadMedia(file);
-    }
+    if(file) url=await uploadMedia(file);
     const row={title:val('r_title'),category:val('r_category'),date:val('r_date')||null,pdf_url:url};
     if(!row.title){alert('Titel is verpligtend.');return;}
     if(!url){alert('Kies ’n PDF of plaas ’n PDF URL.');return;}
     const saved=await cloudInsert('results',row);
-    data.results.unshift({id:saved.id,title:saved.title,category:saved.category,date:saved.date,url:saved.pdf_url});
+    data.results.unshift({id:saved.id,title:saved.title,category:saved.category,date:saved.date,url:saved.pdf_url,created_at:saved.created_at});
     save(); alert('Uitslag gestoor.'); render();
   }catch(e){alert('Kon nie stoor nie: '+e.message);}
 }
@@ -650,7 +617,7 @@ async function addDoc(){
     if(!row.title){alert('Titel is verpligtend.');return;}
     if(!url){alert('Kies ’n PDF of plaas ’n PDF URL.');return;}
     const saved=await cloudInsert('documents',row);
-    data.docs.unshift({id:saved.id,title:saved.title,type:saved.type,date:saved.date,url:saved.url,note:saved.note});
+    data.docs.unshift({id:saved.id,title:saved.title,type:saved.type,date:saved.date,url:saved.url,note:saved.note,created_at:saved.created_at});
     save(); alert('Dokument gestoor.'); render();
   }catch(e){alert('Kon nie stoor nie: '+e.message);}
 }
@@ -658,16 +625,20 @@ async function addDoc(){
 async function saveInfo(){
   try{
     await requireAdmin();
+    let constitutionUrl=data.info.constitution_url||'';
+    const constitutionFile=document.getElementById('i_constitution_file')?.files?.[0];
+    if(constitutionFile) constitutionUrl=await uploadMedia(constitutionFile);
     const row={
       id:1,
       about:val('i_about'),
       contacts:val('i_contacts'),
       management:val('i_management'),
       constitution:val('i_constitution'),
+      constitution_url:constitutionUrl,
       updated_at:new Date().toISOString()
     };
     const saved=await cloudUpsert('wpu_info',row);
-    data.info={about:saved.about||'',contacts:saved.contacts||'',management:saved.management||'',constitution:saved.constitution||''};
+    data.info={about:saved.about||'',contacts:saved.contacts||'',management:saved.management||'',constitution:saved.constitution||'',constitution_url:saved.constitution_url||''};
     save(); alert('WPU inligting gestoor.'); render();
   }catch(e){alert('Kon nie inligting stoor nie: '+e.message);}
 }
@@ -853,6 +824,7 @@ async function restoreBackup(input){
       contacts:incoming.info.contacts||'',
       management:incoming.info.management||'',
       constitution:incoming.info.constitution||'',
+      constitution_url:incoming.info.constitution_url||'',
       updated_at:new Date().toISOString()
     });
 
@@ -901,7 +873,6 @@ window.closeModal=closeModal;
 window.loginAdmin=loginAdmin;
 window.logoutAdmin=logoutAdmin;
 window.refreshCloud=refreshCloud;
-window.testCloud=testCloud;
 window.downloadBackup=downloadBackup;
 window.restoreBackup=restoreBackup;
 window.addWinner=addWinner;

@@ -1,0 +1,14 @@
+WPU 2026 – EENMALIGE SUPABASE MIGRASIE
+
+As jou bestaande Supabase wpu_info tabel reeds bestaan, voer hierdie een keer in SQL Editor uit:
+
+alter table public.wpu_info add column if not exists constitution_url text;
+
+Daarna kan die nuwe Admin-blad die WPU Konstitusie PDF apart oplaai en dit sal op WPU Inligting > Konstitusie vertoon word.
+
+Die algemene Dokumente-afdeling gebruik steeds public.documents en kan gebruik word vir:
+- Inskrywingslyste
+- Kennisgewings
+- Vorms
+- Algemene dokumente
+- Jaarboek 2026

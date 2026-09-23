@@ -32,59 +32,14 @@ h2{margin:28px 0 13px}.grid{display:grid;grid-template-columns:repeat(auto-fit,m
 .gallerythumbs img:hover{border-color:var(--green)}
 @media(max-width:600px){.adminitem{align-items:flex-start}.adminitem .actions{flex-shrink:0}.gallerythumbs img{width:64px;height:50px}}
 
-.site-footer{margin-top:20px;background:#12382b;color:#dfeae4;border-top:4px solid var(--gold)}
-.footer-inner{max-width:1100px;margin:auto;padding:22px 16px;display:flex;justify-content:space-between;align-items:center;gap:20px;font-size:12px}
-.footer-inner strong{display:block;color:#fff;letter-spacing:.08em;font-size:12px}.footer-inner span{display:block;margin-top:4px;opacity:.82}.footer-right{text-align:right}@media(max-width:600px){.footer-inner{display:block;text-align:center}.footer-right{text-align:center;margin-top:10px}}
+footer{text-align:center;padding:25px;color:var(--muted);font-size:12px}
 @media(max-width:600px){.hero{padding:18px}.hero img{width:65px;height:65px}.top{padding-left:10px}.brand{font-size:15px}main{padding-top:15px}}
-
-/* Admin layout */
-.admin-wrap{max-width:1100px;margin:0 auto}
-.admin-topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:18px}
-.admin-topbar h1{margin:3px 0 0}
-.eyebrow{display:block;text-transform:uppercase;letter-spacing:.12em;font-size:11px;font-weight:900;color:var(--gold)}
-.admin-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px;margin:0 0 16px;box-shadow:0 5px 20px #17362b0b}
-.admin-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px}
-.admin-card-head h2{margin:3px 0 4px}
-.login-card{max-width:720px;margin:25px auto}
-.formgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
-.formgrid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
-.field{min-width:0;display:flex;flex-direction:column;gap:6px}
-.field.full{grid-column:1/-1}
-.field label{font-size:13px;font-weight:800}
-.field input,.field textarea,.field select{width:100%;min-width:0;font:inherit;border:1px solid #cfd8d3;border-radius:11px;padding:11px 12px;background:#fff;color:var(--dark);outline:none}
-.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--green);box-shadow:0 0 0 3px #0d5c3b14}
-.field textarea{min-height:105px;resize:vertical}
-.admin-tools{background:linear-gradient(180deg,#fff,#f7faf8)}
-.cloud-badge{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:8px 12px;background:#fff;font-size:12px;font-weight:800;white-space:nowrap}
-.cloud-badge.ok{border-color:#b9dfca;background:#eef9f2}
-.cloud-badge.wait{background:#fff8dd}
-.dot{width:9px;height:9px;border-radius:50%;background:#b59b4c}
-.cloud-badge.ok .dot{background:#23834b}
-.danger-note{background:#fff0f0;border-color:#e7bcbc}
-.filebtn{display:inline-flex;align-items:center}
-.counts{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
-.counts span,.type-pill{display:inline-block;background:#edf3ef;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:800}
-.admin-list{border-top:1px solid var(--line)}
-.admin-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--line)}
-.admin-row-main{display:flex;align-items:center;gap:9px;min-width:0}
-.admin-row-main b{overflow:hidden;text-overflow:ellipsis}
-.smallbtn{padding:7px 10px;flex:0 0 auto}
-.status{border:1px solid #b9dfca}
-@media(max-width:800px){
-  .formgrid,.formgrid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .admin-topbar{align-items:flex-start;flex-direction:column}
-  .counts{justify-content:flex-start}
-}
-@media(max-width:560px){
-  main{padding:15px 10px 45px}
-  .admin-card{padding:15px;border-radius:15px}
-  .formgrid,.formgrid.two{grid-template-columns:1fr}
-  .field.full{grid-column:auto}
-  .admin-card-head{flex-direction:column}
-  .actions .btn,.actions .filebtn{width:100%;justify-content:center}
-  .admin-row{align-items:flex-start}
-}
-
+</style></head>
+<body>
+<header><div class="top"><img class="logo" src="assets/wpu-logo.jpg"><div class="brand">WESTELIKE POSDUIF UNIE<small>WPU 2026 • Jaarboek & Nuus • 🟢 LIVE</small></div></div><nav id="nav"></nav></header>
+<main id="app"></main><footer>Westelike Posduif Unie • 2026</footer>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js" onerror=""></script><script src="app.js"></script>
+</body></html>
 /* PROFESSIONELE ADMIN UITLEG */
 
 .admin-card{
@@ -231,15 +186,3 @@ h2{margin:28px 0 13px}.grid{display:grid;grid-template-columns:repeat(auto-fit,m
     overflow-wrap:anywhere;
   }
 }
-
-</style></head>
-<body>
-<header><div class="top"><img class="logo" src="assets/wpu-logo.jpg"><div class="brand">WESTELIKE POSDUIF UNIE<small>WPU 2026 • Jaarboek & Nuus • 🟢 LIVE</small></div></div><nav id="nav"></nav></header>
-<main id="app"></main><footer class="site-footer">
-  <div class="footer-inner">
-    <div><strong>WESTELIKE POSDUIF UNIE</strong><span>WPU 2026 • Digitale Jaarboek &amp; Uitslae</span></div>
-    <div class="footer-right"><span>Amptelike WPU 2026-platform</span><span>© 2026 WPU</span></div>
-  </div>
-</footer>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js" onerror=""></script><script src="app.js"></script>
-</body></html>
