@@ -30,8 +30,10 @@ const seed = {
     about: 'Welkom by die Westelike Posduif Unie se 2026 digitale jaarboek.',
     contacts: '',
     management: '',
-    constitution: ''
-  }
+    constitution: '',
+    constitution_url: ''
+  },
+  overalls: []
 };
 
 let data = loadLocal();
@@ -58,6 +60,7 @@ function normalizeData(raw){
     winners: Array.isArray(x.winners) ? x.winners : [],
     events: Array.isArray(x.events) ? x.events : [],
     results: Array.isArray(x.results) ? x.results : [],
+    overalls: Array.isArray(x.overalls) ? x.overalls : [],
     docs: Array.isArray(x.docs) ? x.docs : [],
     info: {
       about: x.info?.about || seed.info.about,
@@ -190,7 +193,17 @@ function filterCat(c){ cat=c; render(); }
 
 function resultsPage(a){
   const rs = sortByDateNewest(data.results.filter(r => cat==='ALL' || r.category===cat));
-  a.innerHTML = `<h1>Uitslae</h1>${chips()}${resultList(rs) || empty()}`;
+  const os = sortByDateNewest(data.overalls.filter(o => cat==='ALL' || o.category===cat));
+  a.innerHTML = `<h1>Uitslae</h1>${chips()}${overallList(os)}${resultList(rs) || empty()}`;
+}
+
+function overallList(items){
+  if(!items.length) return '';
+  return `<h2>🏆 Algehele kampioen & Beste duif</h2><div class="overall-grid">${items.map(o=>`<article class="overall-card">
+    <div class="overall-head"><b>${esc(o.category)}</b><span class="meta">Week: ${esc(o.date||'')}</span></div>
+    <div class="overall-person">${o.champion_image_url?imgOrLogo(o.champion_image_url,'overall-img'):''}<div><div class="meta">Algehele Kampioen</div><h3>${esc(o.champion_name||'—')}</h3></div></div>
+    <div class="overall-person">${o.best_bird_image_url?imgOrLogo(o.best_bird_image_url,'overall-img'):''}<div><div class="meta">Algehele Beste Duif</div><h3>${esc(o.best_bird_name||'—')}</h3></div></div>
+  </article>`).join('')}</div>`;
 }
 
 function resultList(rs){
@@ -361,15 +374,30 @@ function adminEventForm(){
 }
 
 function adminResultForm(){
-  return `<section class="admin-card"><h2>Uitslag PDF</h2>
-    <div class="formgrid">
-      <label>Titel<input id="r_title"></label>
-      <label>Kategorie<select id="r_category">${cats.map(c=>`<option>${c}</option>`).join('')}</select></label>
-      <label>Datum<input id="r_date" type="date"></label>
-      <label>PDF lêer<input id="r_file" type="file" accept="application/pdf,.pdf"></label>
-      <label>PDF URL<input id="r_url"></label>
+  return `<section class="admin-card admin-wide"><h2>Uitslae & weeklikse algehele wenners</h2>
+    <div class="admin-subsection"><h3>Uitslag PDF</h3>
+      <div class="formgrid formgrid-wide">
+        <label>Titel<input id="r_title" placeholder="bv. WPU Wedvlugte Week 12"></label>
+        <label>Kategorie<select id="r_category">${cats.map(c=>`<option>${c}</option>`).join('')}</select></label>
+        <label>Datum<input id="r_date" type="date"></label>
+        <label>PDF lêer<input id="r_file" type="file" accept="application/pdf,.pdf"></label>
+        <label>PDF URL<input id="r_url" placeholder="Opsioneel indien PDF reeds aanlyn is"></label>
+      </div>
+      <button class="btn" onclick="addResult()">Stoor uitslag</button>
     </div>
-    <button class="btn" onclick="addResult()">Stoor uitslag</button>
+    <div class="admin-subsection overall-admin">
+      <h3>Algehele Kampioen & Algehele Beste Duif</h3>
+      <p class="small">Hierdie rekord word <b>oorgeskryf</b> wanneer jy dit weer vir dieselfde kategorie stoor. Dus bly daar net die nuutste week se Kampioen en Beste Duif vir WPU, KOSH, SNU, VRYSTAAT, POTCH of JUNIORS.</p>
+      <div class="formgrid formgrid-wide">
+        <label>Kategorie<select id="o_category">${cats.map(c=>`<option>${c}</option>`).join('')}</select></label>
+        <label>Week / datum<input id="o_date" type="date"></label>
+        <label>Algehele Kampioen<input id="o_champion" placeholder="Naam van kampioen"></label>
+        <label>Kampioen foto<input id="o_champion_file" type="file" accept="image/*"></label>
+        <label>Algehele Beste Duif<input id="o_best" placeholder="Naam / ringnommer"></label>
+        <label>Beste duif foto<input id="o_best_file" type="file" accept="image/*"></label>
+      </div>
+      <button class="btn" onclick="saveOverall()">Stoor / Oorskryf week se algehele wenners</button>
+    </div>
   </section>`;
 }
 
@@ -389,15 +417,19 @@ function adminDocForm(){
 }
 
 function adminInfoForm(){
-  return `<section class="admin-card"><h2>WPU inligting</h2>
-    <label>Oor die WPU<textarea id="i_about">${esc(data.info.about)}</textarea></label>
-    <label>Kontak<textarea id="i_contacts">${esc(data.info.contacts)}</textarea></label>
-    <label>Bestuur<textarea id="i_management">${esc(data.info.management)}</textarea></label>
-    <div class="constitution-upload">
-      <label>WPU Konstitusie PDF<input id="i_constitution_file" type="file" accept="application/pdf,.pdf"></label>
+  return `<section class="admin-card admin-wide"><h2>WPU Inligting & Konstitusie</h2>
+    <div class="formgrid formgrid-wide">
+      <label>Oor die WPU<textarea id="i_about">${esc(data.info.about)}</textarea></label>
+      <label>Kontak<textarea id="i_contacts">${esc(data.info.contacts)}</textarea></label>
+      <label>Bestuur<textarea id="i_management">${esc(data.info.management)}</textarea></label>
+      <label>Konstitusie nota / beskrywing<textarea id="i_constitution">${esc(data.info.constitution)}</textarea></label>
+    </div>
+    <div class="admin-subsection constitution-upload">
+      <h3>WPU Konstitusie PDF</h3>
+      <p class="small">Die Konstitusie word as 'n spesiale dokument gestoor. Dit hoef dus nie die <code>constitution_url</code> kolom in <code>wpu_info</code> te gebruik nie.</p>
+      <label>Laai Konstitusie PDF op<input id="i_constitution_file" type="file" accept="application/pdf,.pdf"></label>
       ${data.info.constitution_url ? `<div class="small">Huidige Konstitusie: <a href="${esc(data.info.constitution_url)}" target="_blank" rel="noopener">Maak oop</a></div>` : ''}
     </div>
-    <label>Konstitusie nota / beskrywing<textarea id="i_constitution">${esc(data.info.constitution)}</textarea></label>
     <button class="btn" onclick="saveInfo()">Stoor WPU inligting</button>
   </section>`;
 }
@@ -470,28 +502,30 @@ async function cloudUpsert(table,row){
   return res;
 }
 
-function mapCloud(w,e,r,d,i){
+function mapCloud(w,e,r,d,i,o){
   return {
     winners:(w||[]).map(x=>({id:x.id,week:x.week,race:x.race,name:x.name,club:x.club,date:x.date,image:x.image_url,caption:x.caption,created_at:x.created_at})),
     events:(e||[]).map(x=>({id:x.id,title:x.title,date:x.date,location:x.location,description:x.description,images:Array.isArray(x.images)?x.images:[],created_at:x.created_at})),
     results:(r||[]).map(x=>({id:x.id,title:x.title,category:x.category,date:x.date,url:x.pdf_url,created_at:x.created_at})),
     docs:(d||[]).map(x=>({id:x.id,title:x.title,type:x.type,date:x.date,url:x.url,note:x.note,created_at:x.created_at})),
-    info:i ? {about:i.about||'',contacts:i.contacts||'',management:i.management||'',constitution:i.constitution||'',constitution_url:i.constitution_url||''} : clone(data.info)
+    info:i ? {about:i.about||'',contacts:i.contacts||'',management:i.management||'',constitution:i.constitution||'',constitution_url:((d||[]).find(x=>x.type==='constitution')?.url || i.constitution_url || '')} : clone(data.info),
+    overalls:(o||[]).map(x=>({id:x.id,category:x.category,date:x.date,champion_name:x.champion_name,champion_image_url:x.champion_image_url,best_bird_name:x.best_bird_name,best_bird_image_url:x.best_bird_image_url,updated_at:x.updated_at}))
   };
 }
 
 async function cloudLoad(options={}){
   if(!sb) return false;
   try{
-    const [w,e,r,d,i] = await Promise.all([
+    const [w,e,r,d,i,o] = await Promise.all([
       sb.from('weekly_winners').select('*').order('created_at',{ascending:false}),
       sb.from('events').select('*').order('created_at',{ascending:false}),
       sb.from('results').select('*').order('created_at',{ascending:false}),
       sb.from('documents').select('*').order('created_at',{ascending:false}),
-      sb.from('wpu_info').select('*').eq('id',1).maybeSingle()
+      sb.from('wpu_info').select('*').eq('id',1).maybeSingle(),
+      sb.from('weekly_overalls').select('*').order('updated_at',{ascending:false})
     ]);
 
-    const errors = [w,e,r,d,i].filter(x=>x.error);
+    const errors = [w,e,r,d,i,o].filter(x=>x.error);
     if(errors.length){
       cloudOnline=false;
       console.warn('CLOUD LOAD ERROR DETAILS:', errors.map(x => ({
@@ -503,7 +537,7 @@ async function cloudLoad(options={}){
       return false;
     }
 
-    const cloud = mapCloud(w.data,e.data,r.data,d.data,i.data);
+    const cloud = mapCloud(w.data,e.data,r.data,d.data,i.data,o.data);
     const cloudCount = cloud.winners.length + cloud.events.length + cloud.results.length + cloud.docs.length;
 
     /* Never erase useful local content just because Supabase is empty. */
@@ -607,6 +641,34 @@ async function addResult(){
   }catch(e){alert('Kon nie stoor nie: '+e.message);}
 }
 
+async function saveOverall(){
+  try{
+    await requireAdmin();
+    const category=val('o_category')||'WPU';
+    const date=val('o_date')||new Date().toISOString().slice(0,10);
+    let championImage=(data.overalls.find(x=>x.category===category)||{}).champion_image_url||'';
+    let bestBirdImage=(data.overalls.find(x=>x.category===category)||{}).best_bird_image_url||'';
+    const cf=document.getElementById('o_champion_file')?.files?.[0];
+    const bf=document.getElementById('o_best_file')?.files?.[0];
+    if(cf) championImage=await uploadMedia(cf);
+    if(bf) bestBirdImage=await uploadMedia(bf);
+    const existing=data.overalls.find(x=>x.category===category);
+    const row={
+      id:existing?.id || crypto.randomUUID(),
+      category,date,
+      champion_name:val('o_champion'), champion_image_url:championImage,
+      best_bird_name:val('o_best'), best_bird_image_url:bestBirdImage,
+      updated_at:new Date().toISOString()
+    };
+    if(!row.champion_name || !row.best_bird_name){ alert('Vul asseblief die Algehele Kampioen en Algehele Beste Duif in.'); return; }
+    const {data:saved,error}=await sb.from('weekly_overalls').upsert(row,{onConflict:'category'}).select().single();
+    if(error) throw error;
+    data.overalls=(data.overalls||[]).filter(x=>x.category!==category);
+    data.overalls.unshift(saved);
+    save(); alert(`${category}: Algehele Kampioen en Beste Duif is opgedateer.`); render();
+  }catch(e){ alert('Kon nie algehele wenners stoor nie: '+e.message); }
+}
+
 async function addDoc(){
   try{
     await requireAdmin();
@@ -625,8 +687,8 @@ async function addDoc(){
 async function saveInfo(){
   try{
     await requireAdmin();
-    let constitutionUrl=data.info.constitution_url||'';
     const constitutionFile=document.getElementById('i_constitution_file')?.files?.[0];
+    let constitutionUrl=data.info.constitution_url||'';
     if(constitutionFile) constitutionUrl=await uploadMedia(constitutionFile);
     const row={
       id:1,
@@ -634,11 +696,21 @@ async function saveInfo(){
       contacts:val('i_contacts'),
       management:val('i_management'),
       constitution:val('i_constitution'),
-      constitution_url:constitutionUrl,
       updated_at:new Date().toISOString()
     };
     const saved=await cloudUpsert('wpu_info',row);
-    data.info={about:saved.about||'',contacts:saved.contacts||'',management:saved.management||'',constitution:saved.constitution||'',constitution_url:saved.constitution_url||''};
+    if(constitutionFile || constitutionUrl){
+      const existing=(data.docs||[]).find(d=>d.type==='constitution');
+      const doc={
+        id: existing?.id || crypto.randomUUID(),
+        title:'WPU Konstitusie', type:'constitution', date:new Date().toISOString().slice(0,10),
+        url:constitutionUrl, note:'Amptelike WPU Konstitusie'
+      };
+      const docSaved=await cloudUpsert('documents',doc);
+      data.docs=(data.docs||[]).filter(d=>d.type!=='constitution');
+      data.docs.unshift({id:docSaved.id,title:docSaved.title,type:docSaved.type,date:docSaved.date,url:docSaved.url,note:docSaved.note,created_at:docSaved.created_at});
+    }
+    data.info={about:saved.about||'',contacts:saved.contacts||'',management:saved.management||'',constitution:saved.constitution||'',constitution_url:constitutionUrl};
     save(); alert('WPU inligting gestoor.'); render();
   }catch(e){alert('Kon nie inligting stoor nie: '+e.message);}
 }
@@ -818,13 +890,21 @@ async function restoreBackup(input){
       });
     }
 
+    for(const o of (incoming.overalls||[])){
+      await cloudUpsert('weekly_overalls',{
+        id:restoreId('weekly_overalls',o.id), category:o.category||'WPU', date:o.date||null,
+        champion_name:o.champion_name||'', champion_image_url:o.champion_image_url||'',
+        best_bird_name:o.best_bird_name||'', best_bird_image_url:o.best_bird_image_url||'',
+        updated_at:o.updated_at||new Date().toISOString()
+      });
+    }
+
     await cloudUpsert('wpu_info',{
       id:1,
       about:incoming.info.about||'',
       contacts:incoming.info.contacts||'',
       management:incoming.info.management||'',
       constitution:incoming.info.constitution||'',
-      constitution_url:incoming.info.constitution_url||'',
       updated_at:new Date().toISOString()
     });
 
@@ -878,6 +958,7 @@ window.restoreBackup=restoreBackup;
 window.addWinner=addWinner;
 window.addEvent=addEvent;
 window.addResult=addResult;
+window.saveOverall=saveOverall;
 window.addDoc=addDoc;
 window.saveInfo=saveInfo;
 window.deleteWinner=deleteWinner;

@@ -1,14 +1,16 @@
-WPU 2026 – EENMALIGE SUPABASE MIGRASIE
+WPU 2026 – KONSTITUSIE EN DOKUMENTE
 
-As jou bestaande Supabase wpu_info tabel reeds bestaan, voer hierdie een keer in SQL Editor uit:
+Die huidige Admin-weergawe stoor die WPU Konstitusie as 'n spesiale rekord in public.documents met type = 'constitution'.
+Dit beteken die app het NIE die wpu_info.constitution_url kolom nodig nie.
 
-alter table public.wpu_info add column if not exists constitution_url text;
+As jy reeds die ou SQL uitgevoer het, is dit nie 'n probleem as constitution_url bestaan nie; die app gebruik dit nie vir nuwe uploads nie.
 
-Daarna kan die nuwe Admin-blad die WPU Konstitusie PDF apart oplaai en dit sal op WPU Inligting > Konstitusie vertoon word.
-
-Die algemene Dokumente-afdeling gebruik steeds public.documents en kan gebruik word vir:
+Die algemene Dokumente-afdeling bly public.documents en kan gebruik word vir:
 - Inskrywingslyste
 - Kennisgewings
 - Vorms
 - Algemene dokumente
 - Jaarboek 2026
+
+Die nuwe weekly_overalls tabel word deur setup.sql geskep en hou een huidige rekord per kategorie (WPU, KOSH, SNU, VRYSTAAT, POTCH, JUNIORS).
+Wanneer dieselfde kategorie weer gestoor word, word die vorige week se algehele kampioen en beste duif oorgeskryf.

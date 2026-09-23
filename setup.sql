@@ -46,3 +46,23 @@ create policy "admin media write" on storage.objects for all using (bucket_id='w
 
 -- After creating your Auth user, run this with that user's UUID:
 -- insert into public.admins(user_id) values('YOUR-AUTH-USER-UUID');
+
+-- WPU 2026: one current overall champion + best bird per category.
+-- Saving the same category again overwrites that category's previous week.
+create table if not exists public.weekly_overalls (
+  id uuid primary key default gen_random_uuid(),
+  category text not null unique,
+  date date,
+  champion_name text not null,
+  champion_image_url text,
+  best_bird_name text not null,
+  best_bird_image_url text,
+  updated_at timestamptz default now()
+);
+
+alter table public.weekly_overalls enable row level security;
+drop policy if exists "public read weekly overalls" on public.weekly_overalls;
+drop policy if exists "admin write weekly overalls" on public.weekly_overalls;
+drop policy if exists "WPU ADMIN WEEKLY OVERALLS" on public.weekly_overalls;
+create policy "public read weekly overalls" on public.weekly_overalls for select using (true);
+create policy "WPU ADMIN WEEKLY OVERALLS" on public.weekly_overalls for all using (auth.uid() in (select user_id from public.admins)) with check (auth.uid() in (select user_id from public.admins));
