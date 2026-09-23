@@ -43,5 +43,6 @@ insert into storage.buckets(id,name,public) values('wpu-media','wpu-media',true)
 create policy "public media read" on storage.objects for select using (bucket_id='wpu-media');
 create policy "admin media write" on storage.objects for all using (bucket_id='wpu-media' and auth.uid() in (select user_id from public.admins)) with check (bucket_id='wpu-media' and auth.uid() in (select user_id from public.admins));
 
--- After creating your Auth user, run this with that user's UUID:
--- insert into public.admins(user_id) values('YOUR-AUTH-USER-UUID');
+-- IMPORTANT: after creating the Supabase Auth user, run RLS-FIX.sql.
+-- Replace YOUR-ADMIN-EMAIL-HERE with the email used on the Admin Aanmelding screen.
+-- This registers that Auth user in public.admins so RLS permits writes.
