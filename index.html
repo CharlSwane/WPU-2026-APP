@@ -34,178 +34,35 @@ h2{margin:28px 0 13px}.grid{display:grid;grid-template-columns:repeat(auto-fit,m
 
 footer{text-align:center;padding:25px;color:var(--muted);font-size:12px}
 @media(max-width:600px){.hero{padding:18px}.hero img{width:65px;height:65px}.top{padding-left:10px}.brand{font-size:15px}main{padding-top:15px}}
-</style>
-<style>
-/* WPU 2026 - spacious professional admin layout */
-.admin-card.admin-wide{max-width:1100px;margin-left:auto;margin-right:auto}
-.formgrid-wide{grid-template-columns:repeat(2,minmax(320px,1fr));column-gap:28px;row-gap:24px}
-.admin-subsection{margin-top:22px;padding:22px;border:1px solid #dbe5df;border-radius:16px;background:#f8fbf9}
-.admin-subsection h3{margin:0 0 8px;font-size:18px}
-.overall-admin{background:#f1f7f3}
-.constitution-upload{margin-top:22px;padding:22px;border:1px solid #dbe5df;border-radius:16px;background:#f8fbf9}
-.overall-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:24px}
-.overall-card{border:1px solid var(--line);border-radius:16px;padding:18px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.04)}
-.overall-head{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:14px}
-.overall-person{display:flex;align-items:center;gap:14px;padding:12px 0;border-top:1px solid var(--line)}
-.overall-person:first-of-type{border-top:0}
-.overall-person h3{margin:3px 0 0}
-.overall-img{width:72px;height:72px;object-fit:cover;border-radius:12px}
-@media(max-width:800px){
-  .formgrid-wide{grid-template-columns:1fr;column-gap:0;row-gap:18px}
-  .overall-grid{grid-template-columns:1fr}
-  .admin-subsection,.constitution-upload{padding:16px}
-}
-</style>
 
-</head>
+/* FINAL ADMIN LAYOUT */
+.admin-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px;margin:0 0 24px;box-shadow:0 5px 20px #17362b0b}
+.admin-card h2{margin:0 0 22px;padding-bottom:13px;border-bottom:2px solid #edf1ee;font-size:21px}
+.formgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:34px;row-gap:24px;margin-bottom:22px}
+.formgrid label,.admin-card>label{display:flex;flex-direction:column;gap:9px;min-width:0;font-weight:750;font-size:14px}
+.formgrid input,.formgrid select,.admin-card input,.admin-card textarea,.admin-card select{width:100%;min-height:48px;padding:12px 14px;border:1px solid #cbd5cf;border-radius:11px;background:#fff;color:var(--dark);font:inherit;outline:none}
+.admin-card textarea{min-height:120px;resize:vertical;line-height:1.45}
+.formgrid input:focus,.formgrid select:focus,.admin-card input:focus,.admin-card textarea:focus,.admin-card select:focus{border-color:var(--green);box-shadow:0 0 0 3px #0d5c3b18}
+.admin-card input[type=file]{padding:9px}
+.admin-card .btn{min-height:45px;padding:11px 19px}
+.admin-actions{display:flex;flex-wrap:wrap;gap:12px;padding:16px;margin:0 0 24px;background:#edf4f0;border:1px solid #d8e5de;border-radius:15px}
+.admin-row{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:16px 0;border-top:1px solid var(--line)}
+.admin-row>span{min-width:0;line-height:1.45}
+.admin-row .btn{flex:0 0 auto}
+.overall-pdf .actions{margin:0 0 0 auto}
+@media(max-width:700px){.formgrid{grid-template-columns:1fr;row-gap:18px}.admin-card{padding:19px;margin-bottom:18px}.admin-actions{display:grid;grid-template-columns:1fr;gap:10px}.admin-actions .btn,.admin-actions .filebtn{width:100%}.admin-row{align-items:flex-start}.admin-row>span{overflow-wrap:anywhere}.overall-pdf{align-items:flex-start;flex-wrap:wrap}.overall-pdf .actions{width:100%;margin:4px 0 0}.overall-pdf .actions .btn{width:100%}}
+
+.modal-backdrop{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:14px}
+.modal-close{border:0;background:#e9eeeb;color:var(--dark);border-radius:10px;padding:8px 12px;font-size:22px;cursor:pointer}
+.gallerybox{width:min(1000px,100%);height:min(90vh,820px);background:#fff;border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+.gallerymain{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:#111;padding:12px}
+.gallerymain img{max-width:100%;max-height:100%;object-fit:contain}
+.gallerythumbs{display:flex;gap:9px;overflow:auto;padding:10px;background:#fff;border-top:1px solid var(--line)}
+.gallerythumbs img{width:84px;height:64px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid transparent}
+.gallerythumbs img:hover{border-color:var(--green)}
+</style></head>
 <body>
 <header><div class="top"><img class="logo" src="assets/wpu-logo.jpg"><div class="brand">WESTELIKE POSDUIF UNIE<small>WPU 2026 • Jaarboek & Nuus • 🟢 LIVE</small></div></div><nav id="nav"></nav></header>
 <main id="app"></main><footer>Westelike Posduif Unie • 2026</footer>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js" onerror=""></script><script src="app.js"></script>
 </body></html>
-/* PROFESSIONELE ADMIN UITLEG */
-
-.admin-card{
-  background:var(--card);
-  border:1px solid var(--line);
-  border-radius:18px;
-  padding:24px;
-  margin:0 0 22px;
-  box-shadow:0 5px 20px #17362b0b;
-}
-
-.admin-card h2{
-  margin:0 0 20px;
-  padding-bottom:12px;
-  border-bottom:2px solid #edf1ee;
-  font-size:20px;
-}
-
-.formgrid{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  column-gap:28px;
-  row-gap:22px;
-  margin-bottom:20px;
-}
-
-.formgrid label,
-.admin-card>label{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  min-width:0;
-  font-weight:750;
-  font-size:14px;
-}
-
-.formgrid input,
-.formgrid select,
-.admin-card input,
-.admin-card textarea,
-.admin-card select{
-  width:100%;
-  min-height:46px;
-  padding:11px 13px;
-  border:1px solid #cbd5cf;
-  border-radius:11px;
-  background:#fff;
-  color:var(--dark);
-  font:inherit;
-  outline:none;
-}
-
-.admin-card textarea{
-  min-height:120px;
-  resize:vertical;
-  line-height:1.45;
-}
-
-.formgrid input:focus,
-.formgrid select:focus,
-.admin-card input:focus,
-.admin-card textarea:focus,
-.admin-card select:focus{
-  border-color:var(--green);
-  box-shadow:0 0 0 3px #0d5c3b18;
-}
-
-.admin-card input[type=file]{
-  padding:8px;
-}
-
-.admin-actions{
-  display:flex;
-  flex-wrap:wrap;
-  gap:12px;
-  padding:16px;
-  margin:0 0 24px;
-  background:#edf4f0;
-  border:1px solid #d8e5de;
-  border-radius:15px;
-}
-
-.admin-actions .btn,
-.admin-actions .filebtn{
-  margin:0;
-}
-
-.admin-card .btn{
-  min-height:44px;
-  padding:11px 18px;
-}
-
-.admin-row{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:18px;
-  padding:14px 0;
-  border-top:1px solid var(--line);
-}
-
-.admin-row>span{
-  min-width:0;
-  line-height:1.4;
-}
-
-.admin-row .btn{
-  flex:0 0 auto;
-}
-
-.filebtn{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-}
-
-@media(max-width:700px){
-  .formgrid{
-    grid-template-columns:1fr;
-    row-gap:18px;
-  }
-
-  .admin-card{
-    padding:18px;
-    margin-bottom:18px;
-  }
-
-  .admin-actions{
-    display:grid;
-    grid-template-columns:1fr;
-    gap:10px;
-  }
-
-  .admin-actions .btn,
-  .admin-actions .filebtn{
-    width:100%;
-  }
-
-  .admin-row{
-    align-items:flex-start;
-  }
-
-  .admin-row>span{
-    overflow-wrap:anywhere;
-  }
-}

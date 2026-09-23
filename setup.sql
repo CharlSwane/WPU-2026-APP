@@ -4,8 +4,8 @@ create table if not exists public.weekly_winners (id uuid primary key default ge
 create table if not exists public.events (id uuid primary key default gen_random_uuid(), title text not null, date date, location text, description text, images jsonb default '[]'::jsonb, created_at timestamptz default now());
 create table if not exists public.results (id uuid primary key default gen_random_uuid(), title text not null, category text not null, date date, pdf_url text, created_at timestamptz default now());
 create table if not exists public.documents (id uuid primary key default gen_random_uuid(), title text not null, type text not null, date date, url text, note text, created_at timestamptz default now());
-create table if not exists public.wpu_info (id int primary key default 1, about text, contacts text, management text, constitution text, constitution_url text, updated_at timestamptz default now());
-alter table public.wpu_info add column if not exists constitution_url text;
+create table if not exists public.wpu_info (id int primary key default 1, about text, contacts text, management text, constitution text, updated_at timestamptz default now());
+create table if not exists public.weekly_overalls (id uuid primary key default gen_random_uuid(), category text not null unique, date date, champion_pdf_url text, best_bird_pdf_url text, updated_at timestamptz default now());
 create table if not exists public.admins (user_id uuid primary key references auth.users(id) on delete cascade);
 insert into public.wpu_info(id,about,contacts,management,constitution) values(1,'Welkom by die WPU 2026 digitale jaarboek.','','','') on conflict(id) do nothing;
 
@@ -47,22 +47,16 @@ create policy "admin media write" on storage.objects for all using (bucket_id='w
 -- After creating your Auth user, run this with that user's UUID:
 -- insert into public.admins(user_id) values('YOUR-AUTH-USER-UUID');
 
--- WPU 2026: one current overall champion + best bird per category.
--- Saving the same category again overwrites that category's previous week.
-create table if not exists public.weekly_overalls (
-  id uuid primary key default gen_random_uuid(),
-  category text not null unique,
-  date date,
-  champion_name text not null,
-  champion_image_url text,
-  best_bird_name text not null,
-  best_bird_image_url text,
-  updated_at timestamptz default now()
-);
+
+-- Weekly overall champion / best bird: one current record per category.
+alter table public.weekly_overalls alter column champion_name drop not null;
+alter table public.weekly_overalls alter column best_bird_name drop not null;
+alter table public.weekly_overalls add column if not exists champion_pdf_url text;
+alter table public.weekly_overalls add column if not exists best_bird_pdf_url text;
+alter table public.weekly_overalls add column if not exists updated_at timestamptz default now();
 
 alter table public.weekly_overalls enable row level security;
 drop policy if exists "public read weekly overalls" on public.weekly_overalls;
 drop policy if exists "admin write weekly overalls" on public.weekly_overalls;
-drop policy if exists "WPU ADMIN WEEKLY OVERALLS" on public.weekly_overalls;
 create policy "public read weekly overalls" on public.weekly_overalls for select using (true);
-create policy "WPU ADMIN WEEKLY OVERALLS" on public.weekly_overalls for all using (auth.uid() in (select user_id from public.admins)) with check (auth.uid() in (select user_id from public.admins));
+create policy "admin write weekly overalls" on public.weekly_overalls for all using (auth.uid() in (select user_id from public.admins)) with check (auth.uid() in (select user_id from public.admins));
