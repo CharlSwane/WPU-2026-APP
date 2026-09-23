@@ -109,6 +109,34 @@ function newestFirst(list){
   return [...(Array.isArray(list)?list:[])].sort((a,b)=>dateValue(b)-dateValue(a));
 }
 
+function itemYear(x){
+  const raw = x?.date || x?.updated_at || '';
+  const m = String(raw).match(/(20\d{2})/);
+  return m ? Number(m[1]) : 2026;
+}
+
+function allContent(){
+  return [
+    ...data.winners, ...data.events, ...data.results, ...data.docs, ...data.overalls
+  ];
+}
+
+function activeYear(){
+  const years = allContent().map(itemYear).filter(Number.isFinite);
+  return Math.max(2026, ...years);
+}
+
+function yearsAvailable(){
+  const ys = new Set(allContent().map(itemYear));
+  ys.add(activeYear());
+  return [...ys].sort((a,b)=>b-a);
+}
+
+function currentYearOnly(list){
+  const y=activeYear();
+  return (Array.isArray(list)?list:[]).filter(x=>itemYear(x)===y);
+}
+
 function nav(){
   const el = document.querySelector('#nav');
   if (!el) return;
@@ -116,15 +144,20 @@ function nav(){
     ['home','Tuis'],
     ['winners','Weeklikse wenners'],
     ['results','Uitslae'],
-    ['yearbook','Jaarboek 2026'],
+    ['yearbook',`Jaarboek ${activeYear()}`],
     ['events','Byeenkomste'],
     ['documents','Dokumente'],
+    ['archives','Argiewe'],
     ['info','WPU Inligting'],
     ['admin','Admin']
   ];
   el.innerHTML = items.map(([p,label]) =>
     `<button class="navbtn ${page===p?'active':''}" onclick="go('${p}')">${label}</button>`
   ).join('');
+  const yr=activeYear();
+  const brand=document.querySelector('.brand');
+  if(brand) brand.innerHTML=`WESTELIKE POSDUIF UNIE<small>WPU ${yr} • Jaarboek & Nuus • 🟢 LIVE</small>`;
+  document.title=`WPU ${yr}`;
 }
 
 function go(p){
@@ -138,7 +171,7 @@ function render(){
   nav();
   const a = document.querySelector('#app');
   if (!a) return;
-  const fn = {home:home,winners:winPage,results:resultsPage,yearbook:yearbook,events:eventsPage,documents:documentsPage,info:infoPage,admin:adminPage}[page] || home;
+  const fn = {home:home,winners:winPage,results:resultsPage,yearbook:yearbook,events:eventsPage,documents:documentsPage,archives:archivesPage,info:infoPage,admin:adminPage}[page] || home;
   try { fn(a); }
   catch(e) {
     console.error(e);
@@ -147,17 +180,17 @@ function render(){
 }
 
 function home(a){
-  const ws = newestFirst(data.winners).slice(0,6);
+  const ws = newestFirst(currentYearOnly(data.winners)).slice(0,6);
   a.innerHTML = `
     <section class="hero">
       <img src="assets/wpu-logo.jpg" alt="WPU">
-      <div><h1>WPU 2026</h1><p>Jou digitale jaarboek, weeklikse wenners, uitslae en byeenkomste.</p></div>
+      <div><h1>WPU ${activeYear()}</h1><p>Jou digitale jaarboek, weeklikse wenners, uitslae en byeenkomste.</p></div>
     </section>
     <h2>🏆 Weeklikse wenners</h2>
     <div class="grid">${ws.map(winnerCard).join('') || empty()}</div>
-    <h2>📊 Jongste uitslae</h2>${resultList(data.results.slice(0,5))}
+    <h2>📊 Jongste uitslae</h2>${resultList(newestFirst(currentYearOnly(data.results)).slice(0,5))}
     <h2>📅 Komende / onlangse byeenkomste</h2>
-    <div class="grid">${data.events.slice(0,4).map(eventCard).join('') || empty()}</div>`;
+    <div class="grid">${newestFirst(currentYearOnly(data.events)).slice(0,4).map(eventCard).join('') || empty()}</div>`;
 }
 
 function winnerCard(w){
@@ -175,7 +208,7 @@ function winnerCard(w){
 
 function winPage(a){
   a.innerHTML = `<h1>Weeklikse wenners</h1>
-    <div class="grid">${newestFirst(data.winners).map(winnerCard).join('') || empty()}</div>`;
+    <div class="grid">${newestFirst(currentYearOnly(data.winners)).map(winnerCard).join('') || empty()}</div>`;
 }
 
 function chips(){
@@ -188,8 +221,8 @@ function chips(){
 function filterCat(c){ cat=c; render(); }
 
 function resultsPage(a){
-  const rs = newestFirst(data.results).filter(r => cat==='ALL' || r.category===cat);
-  const filteredOs = newestFirst(data.overalls).filter(r => cat==='ALL' || r.category===cat);
+  const rs = newestFirst(currentYearOnly(data.results)).filter(r => cat==='ALL' || r.category===cat);
+  const filteredOs = newestFirst(currentYearOnly(data.overalls)).filter(r => cat==='ALL' || r.category===cat);
   a.innerHTML = `<h1>Uitslae</h1>${chips()}${resultList(rs) || empty()}${overallList(filteredOs)}`;
 }
 
@@ -220,8 +253,8 @@ function overallList(rows){
 }
 
 function yearbook(a){
-  const docs = data.docs.filter(d => d.type==='yearbook');
-  a.innerHTML = `<h1>Jaarboek 2026</h1>${docs.length ? docs.map(docCard).join('') : empty('Laai die 2026 jaarboek in by Admin.')}`;
+  const docs = currentYearOnly(data.docs).filter(d => d.type==='yearbook');
+  a.innerHTML = `<h1>Jaarboek ${activeYear()}</h1>${docs.length ? docs.map(docCard).join('') : empty(`Laai die ${activeYear()} jaarboek in by Admin.`)}`;
 }
 
 function docCard(d){
@@ -236,13 +269,13 @@ function docCard(d){
 }
 
 function documentsPage(a){
-  const docs=newestFirst(data.docs).filter(d=>d.type!=='constitution');
+  const docs=newestFirst(currentYearOnly(data.docs)).filter(d=>d.type!=='constitution');
   a.innerHTML = `<h1>Dokumente</h1>${docs.length ? docs.map(docCard).join('') : empty('Geen dokumente beskikbaar nie.')}`;
 }
 
 function eventsPage(a){
   a.innerHTML = `<h1>Byeenkomste & Funksies</h1>
-    <div class="grid">${newestFirst(data.events).map(eventCard).join('') || empty()}</div>`;
+    <div class="grid">${newestFirst(currentYearOnly(data.events)).map(eventCard).join('') || empty()}</div>`;
 }
 
 function eventCard(e){
@@ -254,7 +287,7 @@ function eventCard(e){
       <div class="meta">${esc(e.date)}${e.location?' • '+esc(e.location):''}</div>
       <h3>${esc(e.title)}</h3>
       <p>${mapsHtml(e.description||'')}</p>
-      ${imgs.length>1 ? `<button class="btn secondary" type="button" onclick='viewEvent(${JSON.stringify(e.id)})'>View ${imgs.length} foto’s</button>` : ''}
+      ${imgs.length>1 ? `<button class="btn secondary" type="button" onclick='viewEvent(${JSON.stringify(e.id)})'>View ${imgs.length-1} ekstra foto’s</button>` : ''}
     </div>
   </article>`;
 }
@@ -295,6 +328,24 @@ function viewEvent(id){
 function closeModal(ev){
   if(ev && ev.target && !ev.target.classList.contains('modal-backdrop')) return;
   document.querySelectorAll('.modal-backdrop').forEach(x=>x.remove());
+}
+
+function archivesPage(a){
+  const years=yearsAvailable().filter(y=>y!==activeYear());
+  if(!years.length){
+    a.innerHTML=`<h1>Argiewe</h1>${empty('Geen vorige jare is nog beskikbaar nie.')}`;
+    return;
+  }
+  a.innerHTML=`<h1>Argiewe</h1><p class="small">Vorige WPU-jare word hier per jaar bewaar. Die huidige jaar verskyn op die hoofbladsye.</p>${years.map(y=>archiveYearCard(y)).join('')}`;
+}
+
+function archiveYearCard(y){
+  const winners=newestFirst(data.winners.filter(x=>itemYear(x)===y));
+  const results=newestFirst(data.results.filter(x=>itemYear(x)===y));
+  const events=newestFirst(data.events.filter(x=>itemYear(x)===y));
+  const docs=newestFirst(data.docs.filter(x=>itemYear(x)===y));
+  const overs=newestFirst(data.overalls.filter(x=>itemYear(x)===y));
+  return `<section class="archive-card"><h2>WPU ${y}</h2><div class="archive-stats"><span>🏆 ${winners.length} wenners</span><span>📄 ${results.length} uitslae</span><span>📅 ${events.length} byeenkomste</span><span>📚 ${docs.length} dokumente</span><span>⭐ ${overs.length} algehele</span></div><details><summary>Wys ${y} se inhoud</summary>${results.length?`<h3>Uitslae</h3>${resultList(results)}`:''}${overs.length?overallList(overs):''}${events.length?`<h3>Byeenkomste</h3><div class="grid">${events.map(eventCard).join('')}</div>`:''}${docs.length?`<h3>Dokumente</h3>${docs.map(docCard).join('')}`:''}${winners.length?`<h3>Weeklikse wenners</h3><div class="grid">${winners.map(winnerCard).join('')}</div>`:''}</details></section>`;
 }
 
 function infoPage(a){
@@ -371,7 +422,7 @@ function adminEventForm(){
       <label>Plek<input id="e_location"></label>
       <label>Hooffoto<input id="e_file" type="file" accept="image/*"></label>
       <label>Hooffoto URL<input id="e_image"></label>
-      <label>Meer foto’s<input id="e_files" type="file" accept="image/*" multiple></label>
+      <label>Meer foto’s <span class="small">Jy kan 1–20 foto’s gelyk kies</span><input id="e_files" type="file" accept="image/*" multiple></label>
     </div>
     <label>Beskrywing / Google Maps skakel<textarea id="e_desc"></textarea></label>
     <button class="btn" onclick="addEvent()">Stoor byeenkoms</button>
@@ -622,11 +673,19 @@ async function addEvent(){
     const mainFile=document.getElementById('e_file')?.files?.[0];
     if(mainFile) images.push(await uploadMedia(mainFile));
     else if(val('e_image')) images.push(val('e_image'));
-    const mainName=mainFile ? `${mainFile.name}:${mainFile.size}` : '';
+    const mainName=mainFile ? `${mainFile.name}:${mainFile.size}:${mainFile.lastModified}` : '';
     const files=[...(document.getElementById('e_files')?.files||[])];
+    const uniqueFiles=[];
+    const seen=new Set();
     for(const f of files){
-      if(mainName && `${f.name}:${f.size}`===mainName) continue;
-      images.push(await uploadMedia(f));
+      const key=`${f.name}:${f.size}:${f.lastModified}`;
+      if(mainName && key===mainName) continue;
+      if(seen.has(key)) continue;
+      seen.add(key); uniqueFiles.push(f);
+    }
+    if(uniqueFiles.length){
+      const urls=await Promise.all(uniqueFiles.map(f=>uploadMedia(f)));
+      images.push(...urls);
     }
     const row={title:val('e_title'),date:val('e_date')||null,location:val('e_location'),description:val('e_desc'),images};
     if(!row.title){alert('Naam van byeenkoms is verpligtend.');return;}
@@ -664,17 +723,18 @@ async function saveOverall(){
     if(cf) champion=await uploadMedia(cf);
     if(bf) bird=await uploadMedia(bf);
     if(!champion && !bird){alert('Kies minstens een PDF.');return;}
-    const existing=data.overalls.find(x=>x.category===category);
+    const existing=data.overalls.find(x=>x.category===category && itemYear(x)===Number(String(date).slice(0,4)));
+    const year=Number(String(date).slice(0,4));
     const row={
       id:existing?.id,
-      category, date,
+      category, date, year,
       champion_pdf_url:champion || existing?.champion_url || null,
       best_bird_pdf_url:bird || existing?.best_bird_url || null,
       updated_at:new Date().toISOString()
     };
-    const saved=await cloudUpsert('weekly_overalls',row,'category');
-    const mapped={id:saved.id,category:saved.category,date:saved.date,champion_url:saved.champion_pdf_url,best_bird_url:saved.best_bird_pdf_url};
-    data.overalls=[...data.overalls.filter(x=>x.category!==category),mapped];
+    const saved=await cloudUpsert('weekly_overalls',row,'category,year');
+    const mapped={id:saved.id,category:saved.category,date:saved.date,year:saved.year,champion_url:saved.champion_pdf_url,best_bird_url:saved.best_bird_pdf_url};
+    data.overalls=[...data.overalls.filter(x=>!(x.category===category && itemYear(x)===year)),mapped];
     save(); alert(`${category} se algehele PDFs is gestoor/oorgeskryf.`); render();
   }catch(e){alert('Kon nie algehele PDFs stoor nie: '+e.message);}
 }

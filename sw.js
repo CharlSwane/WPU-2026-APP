@@ -1,4 +1,4 @@
-const CACHE='wpu-2026-v5';
+const CACHE='wpu-2026-v6';
 const SHELL=['./','./index.html','./manifest.webmanifest','./assets/wpu-logo.jpg'];
 
 self.addEventListener('install',event=>{
