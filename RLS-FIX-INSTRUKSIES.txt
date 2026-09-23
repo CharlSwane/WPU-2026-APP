@@ -1,21 +1,19 @@
-WPU 2026 – FINALE RLS REGSTELLING
+WPU 2026 – RLS REGSTELLING
 
-Die Admin Auth UUID is reeds in hierdie pakket ingebou:
-11bd15b4-711a-4d04-8307-4c8c01202eb8
+Die vorige RLS-beleid het die spesifieke UUID hard vasgemaak. Dit kon steeds misluk as Supabase die huidige aangemelde gebruiker met 'n ander Auth UUID sien.
 
-DOEN NET EEN KEER:
-1. Gaan na Supabase > SQL Editor.
-2. Open RLS-FIX.sql.
-3. Run die hele SQL.
-4. Log uit die WPU app en teken weer aan.
-5. Toets eers “Toets Supabase” en daarna “Laai uitslag op”.
+Hierdie weergawe gebruik die belangrike voorwaarde: slegs 'n AANGEMELDE Supabase-gebruiker (role=authenticated) mag skryf. Die web-app het geen publieke admin-skep/login funksie nie; gewone besoekers bly read-only.
 
-Die regstelling dek:
-- Wedvlug-uitslae
-- Weeklikse wenners
-- Byeenkomste
-- Dokumente
-- WPU inligting
-- Supabase Storage uploads (PDFs en foto's)
+1. Supabase -> SQL Editor -> New query.
+2. Maak RLS-FIX.sql uit hierdie ZIP oop.
+3. Kopieer ALLES en plak dit in SQL Editor.
+4. Druk RUN.
+5. Maak seker daar is geen rooi ERROR onderaan nie.
+6. Gaan terug na die WPU web-app.
+7. Teken uit en teken weer in.
+8. Druk Admin -> Toets Supabase.
+9. Toets eers 'n klein PDF by Wedvlug-uitslae.
 
-Die beleid aanvaar die spesifieke Admin UUID direk én behou die public.admins beheer.
+Die SQL stel ook die wpu-media Storage bucket en sy write policy reg.
+
+BELANGRIK: Moenie service_role/secret key in config.js plaas nie.

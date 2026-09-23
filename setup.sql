@@ -32,19 +32,19 @@ drop policy if exists "public media read" on storage.objects;
 drop policy if exists "admin media write" on storage.objects;
 
 create policy "public read winners" on public.weekly_winners for select using (true);
-create policy "admin write winners" on public.weekly_winners for all using ((auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins))) with check ((auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins)));
+create policy "admin write winners" on public.weekly_winners for all using ((auth.role() = 'authenticated' and auth.uid() is not null)) with check ((auth.role() = 'authenticated' and auth.uid() is not null));
 create policy "public read events" on public.events for select using (true);
-create policy "admin write events" on public.events for all using ((auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins))) with check ((auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins)));
+create policy "admin write events" on public.events for all using ((auth.role() = 'authenticated' and auth.uid() is not null)) with check ((auth.role() = 'authenticated' and auth.uid() is not null));
 create policy "public read results" on public.results for select using (true);
-create policy "admin write results" on public.results for all using ((auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins))) with check ((auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins)));
+create policy "admin write results" on public.results for all using ((auth.role() = 'authenticated' and auth.uid() is not null)) with check ((auth.role() = 'authenticated' and auth.uid() is not null));
 create policy "public read documents" on public.documents for select using (true);
-create policy "admin write documents" on public.documents for all using ((auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins))) with check ((auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins)));
+create policy "admin write documents" on public.documents for all using ((auth.role() = 'authenticated' and auth.uid() is not null)) with check ((auth.role() = 'authenticated' and auth.uid() is not null));
 create policy "public read info" on public.wpu_info for select using (true);
-create policy "admin write info" on public.wpu_info for all using ((auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins))) with check ((auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins)));
+create policy "admin write info" on public.wpu_info for all using ((auth.role() = 'authenticated' and auth.uid() is not null)) with check ((auth.role() = 'authenticated' and auth.uid() is not null));
 
 insert into storage.buckets(id,name,public) values('wpu-media','wpu-media',true) on conflict(id) do update set public=true;
 create policy "public media read" on storage.objects for select using (bucket_id='wpu-media');
-create policy "admin media write" on storage.objects for all using (bucket_id='wpu-media' and (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins))) with check (bucket_id='wpu-media' and (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins)));
+create policy "admin media write" on storage.objects for all using (bucket_id='wpu-media' and (auth.role() = 'authenticated' and auth.uid() is not null)) with check (bucket_id='wpu-media' and (auth.role() = 'authenticated' and auth.uid() is not null));
 
 -- IMPORTANT: after creating the Supabase Auth user, run RLS-FIX.sql.
 -- Replace YOUR-ADMIN-EMAIL-HERE with the email used on the Admin Aanmelding screen.

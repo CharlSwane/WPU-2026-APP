@@ -35,32 +35,32 @@ alter table public.wpu_info enable row level security;
 drop policy if exists "admin write winners" on public.weekly_winners;
 create policy "admin write winners" on public.weekly_winners
 for all
-using (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins))
-with check (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins));
+using (auth.role() = 'authenticated' and auth.uid() is not null)
+with check (auth.role() = 'authenticated' and auth.uid() is not null);
 
 drop policy if exists "admin write events" on public.events;
 create policy "admin write events" on public.events
 for all
-using (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins))
-with check (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins));
+using (auth.role() = 'authenticated' and auth.uid() is not null)
+with check (auth.role() = 'authenticated' and auth.uid() is not null);
 
 drop policy if exists "admin write results" on public.results;
 create policy "admin write results" on public.results
 for all
-using (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins))
-with check (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins));
+using (auth.role() = 'authenticated' and auth.uid() is not null)
+with check (auth.role() = 'authenticated' and auth.uid() is not null);
 
 drop policy if exists "admin write documents" on public.documents;
 create policy "admin write documents" on public.documents
 for all
-using (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins))
-with check (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins));
+using (auth.role() = 'authenticated' and auth.uid() is not null)
+with check (auth.role() = 'authenticated' and auth.uid() is not null);
 
 drop policy if exists "admin write info" on public.wpu_info;
 create policy "admin write info" on public.wpu_info
 for all
-using (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins))
-with check (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins));
+using (auth.role() = 'authenticated' and auth.uid() is not null)
+with check (auth.role() = 'authenticated' and auth.uid() is not null);
 
 -- Storage used for result PDFs, winner photos and event photos.
 insert into storage.buckets(id,name,public)
@@ -72,11 +72,11 @@ create policy "admin media write" on storage.objects
 for all
 using (
   bucket_id='wpu-media'
-  and (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins))
+  and (auth.role() = 'authenticated' and auth.uid() is not null)
 )
 with check (
   bucket_id='wpu-media'
-  and (auth.uid() = '11bd15b4-711a-4d04-8307-4c8c01202eb8'::uuid or auth.uid() in (select user_id from public.admins))
+  and (auth.role() = 'authenticated' and auth.uid() is not null)
 );
 
 -- Public read policies.

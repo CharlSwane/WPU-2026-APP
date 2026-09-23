@@ -297,7 +297,7 @@ function adminPage(a){
   const cloudLabel = cloudOnline ? 'Supabase gekoppel' : 'Supabase verbinding word getoets...';
   a.innerHTML = `<div class="admin-wrap">
     <div class="admin-topbar">
-      <div><span class="eyebrow">WPU 2026</span><h1>Administrasie</h1><p class="small">Aangemeld as <b>${esc(currentUser.email||'')}</b></p></div>
+      <div><span class="eyebrow">WPU 2026</span><h1>Administrasie</h1><p class="small">Aangemeld as <b>${esc(currentUser.email||'')}</b></p><p class="small">Supabase gebruiker: <code>${esc(currentUser.id||'')}</code></p></div>
       <div class="cloud-badge ${cloudOnline?'ok':'wait'}"><span class="dot"></span>${cloudLabel}</div>
     </div>
 
@@ -446,6 +446,10 @@ async function requireAdmin(){
   }
 
   if(!currentUser) throw new Error('Teken eers as admin aan.');
+
+  // RLS writes must carry an authenticated JWT. Keep the actual UID visible in the
+  // admin area so a Supabase project/user mismatch can be diagnosed immediately.
+  window.WPU_AUTH_UID = currentUser.id || '';
 }
 
 async function uploadMedia(file){
