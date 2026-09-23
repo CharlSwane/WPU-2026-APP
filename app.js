@@ -278,16 +278,25 @@ function eventsPage(a){
     <div class="grid">${newestFirst(currentYearOnly(data.events)).map(eventCard).join('') || empty()}</div>`;
 }
 
+function eventImages(e){
+  let imgs = e && e.images;
+  if(typeof imgs === 'string'){
+    try { imgs = JSON.parse(imgs); } catch(_) { imgs = [imgs]; }
+  }
+  return Array.isArray(imgs) ? imgs.filter(u => typeof u === 'string' && u.trim()) : [];
+}
+
 function eventCard(e){
-  const imgs = Array.isArray(e.images) ? e.images : [];
+  const imgs = eventImages(e);
+  const thumbs = imgs.slice(0,4).map((u,i)=>`<img class="event-thumb" src="${esc(u)}" alt="Foto ${i+1}" loading="lazy" onerror="this.style.display='none'">`).join('');
   return `<article class="card event-card">
-    ${imgs[0] ? `<img class="event-img" src="${esc(imgs[0])}" onclick='viewEvent(${JSON.stringify(e.id)})' alt="" loading="lazy">`
-      : `<div class="event-img placeholder"></div>`}
+    ${imgs[0] ? `<button class="event-photo-button" type="button" onclick='viewEvent(${JSON.stringify(e.id)})' aria-label="Wys foto’s"><img class="event-img" src="${esc(imgs[0])}" alt="" loading="eager" onerror="this.style.display='none'"></button>` : `<div class="event-img placeholder"></div>`}
+    ${imgs.length>1 ? `<div class="event-thumb-strip">${thumbs}</div>` : ''}
     <div class="body">
       <div class="meta">${esc(e.date)}${e.location?' • '+esc(e.location):''}</div>
       <h3>${esc(e.title)}</h3>
       <p>${mapsHtml(e.description||'')}</p>
-      ${imgs.length>1 ? `<button class="btn secondary" type="button" onclick='viewEvent(${JSON.stringify(e.id)})'>View ${imgs.length-1} ekstra foto’s</button>` : ''}
+      ${imgs.length>1 ? `<button class="btn secondary" type="button" onclick='viewEvent(${JSON.stringify(e.id)})'>Wys al ${imgs.length} foto’s</button>` : ''}
     </div>
   </article>`;
 }
@@ -309,17 +318,16 @@ function mapsHtml(text){
 function viewEvent(id){
   const e = data.events.find(x=>String(x.id)===String(id));
   if(!e) return;
-  const imgs = Array.isArray(e.images) ? e.images : [];
-  const extras = imgs.slice(1);
-  if(!extras.length){
-    alert('Daar is geen ekstra foto’s om te wys nie.');
+  const imgs = eventImages(e);
+  if(!imgs.length){
+    alert('Daar is geen foto’s om te wys nie.');
     return;
   }
   const html = `<div class="modal-backdrop" onclick="closeModal(event)">
     <div class="gallerybox" onclick="event.stopPropagation()">
       <div class="pdfhead"><div><b>${esc(e.title)}</b><div class="meta">${esc(e.date||'')}</div></div><button class="btn danger" onclick="closeModal()">Maak toe</button></div>
-      <div class="gallerymain"><img src="${esc(extras[0])}" alt="" id="galleryMainImage"></div>
-      <div class="gallerythumbs">${extras.map((u,i)=>`<img src="${esc(u)}" alt="Foto ${i+1}" onclick='document.getElementById("galleryMainImage").src=${JSON.stringify(u)}'>`).join('')}</div>
+      <div class="gallerymain"><img src="${esc(imgs[0])}" alt="Foto 1" id="galleryMainImage" onerror="this.alt='Foto kon nie laai nie'"></div>
+      <div class="gallerythumbs">${imgs.map((u,i)=>`<img src="${esc(u)}" alt="Foto ${i+1}" loading="lazy" onclick='document.getElementById("galleryMainImage").src=${JSON.stringify(u)}'>`).join('')}</div>
     </div>
   </div>`;
   document.body.insertAdjacentHTML('beforeend',html);
