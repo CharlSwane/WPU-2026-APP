@@ -277,119 +277,146 @@ function nl2br(s){
 
 function adminPage(a){
   if(!sb){
-    a.innerHTML = `<h1>Admin</h1><div class="empty">Supabase is nie gekoppel nie. Kontroleer config.js.</div>`;
+    a.innerHTML = `<h1>Admin</h1><div class="notice danger-note"><b>Supabase is nie gekoppel nie.</b><br>Kontroleer config.js.</div>`;
     return;
   }
   if(!currentUser){
-    a.innerHTML = `<h1>Admin</h1>
-      <section class="admin-card">
-        <h2>Admin aanmelding</h2>
-        <label>E-posadres<input id="ae" type="email" autocomplete="username"></label>
-        <label>Wagwoord<input id="ap" type="password" autocomplete="current-password"></label>
-        <button class="btn" onclick="loginAdmin()">Teken aan</button>
-      </section>`;
+    a.innerHTML = `<div class="admin-wrap">
+      <section class="admin-card login-card">
+        <div class="admin-card-head"><div><span class="eyebrow">WPU 2026</span><h2>Admin aanmelding</h2><p class="small">Teken aan om inhoud na Supabase te laai.</p></div></div>
+        <div class="formgrid two">
+          <div class="field"><label for="ae">E-posadres</label><input id="ae" type="email" autocomplete="username" placeholder="admin e-pos"></div>
+          <div class="field"><label for="ap">Wagwoord</label><input id="ap" type="password" autocomplete="current-password" placeholder="wagwoord"></div>
+        </div>
+        <div class="actions"><button class="btn" onclick="loginAdmin()">Teken aan</button></div>
+      </section>
+    </div>`;
     return;
   }
 
-  a.innerHTML = `<h1>Admin</h1>
-    <p><b>Aangemeld:</b> ${esc(currentUser.email||'')}</p>
-    <div class="admin-actions">
-      <button class="btn" onclick="logoutAdmin()">Teken uit</button>
-      <button class="btn secondary" onclick="refreshCloud()">Herlaai uit Supabase</button>
-      <button class="btn secondary" onclick="downloadBackup()">Laai backup af</button>
-      <label class="btn secondary filebtn">Herstel backup
-        <input type="file" accept=".json,application/json" onchange="restoreBackup(this)" hidden>
-      </label>
+  const cloudLabel = cloudOnline ? 'Supabase gekoppel' : 'Supabase verbinding word getoets...';
+  a.innerHTML = `<div class="admin-wrap">
+    <div class="admin-topbar">
+      <div><span class="eyebrow">WPU 2026</span><h1>Administrasie</h1><p class="small">Aangemeld as <b>${esc(currentUser.email||'')}</b></p></div>
+      <div class="cloud-badge ${cloudOnline?'ok':'wait'}"><span class="dot"></span>${cloudLabel}</div>
     </div>
+
+    <section class="admin-card admin-tools">
+      <div class="admin-card-head"><div><h2>Beheer</h2><p class="small">Laai data vanaf Supabase, maak 'n backup, of herstel 'n vorige backup.</p></div></div>
+      <div class="actions">
+        <button class="btn" onclick="refreshCloud()">↻ Herlaai uit Supabase</button>
+        <button class="btn secondary" onclick="testCloud()">✓ Toets Supabase</button>
+        <button class="btn secondary" onclick="downloadBackup()">↓ Laai backup af</button>
+        <label class="btn secondary filebtn">↑ Herstel backup
+          <input type="file" accept=".json,application/json" onchange="restoreBackup(this)" hidden>
+        </label>
+        <button class="btn danger" onclick="logoutAdmin()">Teken uit</button>
+      </div>
+      <div id="cloud-test-result" class="small status hidden"></div>
+    </section>
+
     ${adminWinnerForm()}
     ${adminEventForm()}
     ${adminResultForm()}
     ${adminDocForm()}
     ${adminInfoForm()}
-    ${adminList()}`;
+    ${adminList()}
+  </div>`;
 }
 
 function adminWinnerForm(){
-  return `<section class="admin-card"><h2>Weeklikse wenner</h2>
+  return `<section class="admin-card">
+    <div class="admin-card-head"><div><span class="eyebrow">01</span><h2>Weeklikse wenner</h2><p class="small">Voeg 'n wenner en foto by. Die foto word in Supabase Storage gestoor.</p></div></div>
     <div class="formgrid">
-      <label>Week<input id="w_week"></label>
-      <label>Wedvlug<input id="w_race"></label>
-      <label>Naam<input id="w_name"></label>
-      <label>Klub<input id="w_club"></label>
-      <label>Datum<input id="w_date" type="date"></label>
-      <label>Foto<input id="w_file" type="file" accept="image/*"></label>
-      <label>Foto URL<input id="w_image"></label>
-      <label>Byskrif<input id="w_caption"></label>
+      <div class="field"><label for="w_week">Week</label><input id="w_week" placeholder="bv. Week 1"></div>
+      <div class="field"><label for="w_race">Wedvlug</label><input id="w_race" placeholder="Wedvlugnaam"></div>
+      <div class="field"><label for="w_name">Naam</label><input id="w_name" placeholder="Duif / lid se naam"></div>
+      <div class="field"><label for="w_club">Klub</label><input id="w_club" placeholder="Klub"></div>
+      <div class="field"><label for="w_date">Datum</label><input id="w_date" type="date"></div>
+      <div class="field"><label for="w_file">Foto</label><input id="w_file" type="file" accept="image/*"></div>
+      <div class="field"><label for="w_image">Foto URL (opsioneel)</label><input id="w_image" placeholder="https://..."></div>
+      <div class="field"><label for="w_caption">Byskrif</label><input id="w_caption" placeholder="Opsioneel"></div>
     </div>
-    <button class="btn" onclick="addWinner()">Stoor wenner</button>
+    <div class="actions"><button class="btn" onclick="addWinner()">Stoor wenner</button></div>
   </section>`;
 }
 
 function adminEventForm(){
-  return `<section class="admin-card"><h2>Byeenkoms / funksie</h2>
+  return `<section class="admin-card">
+    <div class="admin-card-head"><div><span class="eyebrow">02</span><h2>Byeenkoms / funksie</h2><p class="small">Voeg die hoof-foto en enige ekstra foto's by.</p></div></div>
     <div class="formgrid">
-      <label>Naam<input id="e_title"></label>
-      <label>Datum<input id="e_date" type="date"></label>
-      <label>Plek<input id="e_location"></label>
-      <label>Hooffoto<input id="e_file" type="file" accept="image/*"></label>
-      <label>Hooffoto URL<input id="e_image"></label>
-      <label>Meer foto’s<input id="e_files" type="file" accept="image/*" multiple></label>
+      <div class="field"><label for="e_title">Naam</label><input id="e_title" placeholder="Naam van funksie"></div>
+      <div class="field"><label for="e_date">Datum</label><input id="e_date" type="date"></div>
+      <div class="field"><label for="e_location">Plek</label><input id="e_location" placeholder="Plek"></div>
+      <div class="field"><label for="e_file">Hooffoto</label><input id="e_file" type="file" accept="image/*"></div>
+      <div class="field"><label for="e_image">Hooffoto URL</label><input id="e_image" placeholder="https://..."></div>
+      <div class="field"><label for="e_files">Meer foto's</label><input id="e_files" type="file" accept="image/*" multiple></div>
     </div>
-    <label>Beskrywing / Google Maps skakel<textarea id="e_desc"></textarea></label>
-    <button class="btn" onclick="addEvent()">Stoor byeenkoms</button>
+    <div class="field"><label for="e_desc">Beskrywing / Google Maps skakel</label><textarea id="e_desc" placeholder="Beskrywing..."></textarea></div>
+    <div class="actions"><button class="btn" onclick="addEvent()">Stoor byeenkoms</button></div>
   </section>`;
 }
 
 function adminResultForm(){
-  return `<section class="admin-card"><h2>Uitslag PDF</h2>
+  return `<section class="admin-card">
+    <div class="admin-card-head"><div><span class="eyebrow">03</span><h2>Wedvlug-uitslae</h2><p class="small">Kies 'n PDF vanaf die rekenaar. Dit word eers na Supabase Storage gelaai en daarna as 'n uitslag gestoor.</p></div></div>
     <div class="formgrid">
-      <label>Titel<input id="r_title"></label>
-      <label>Kategorie<select id="r_category">${cats.map(c=>`<option>${c}</option>`).join('')}</select></label>
-      <label>Datum<input id="r_date" type="date"></label>
-      <label>PDF lêer<input id="r_file" type="file" accept="application/pdf,.pdf"></label>
-      <label>PDF URL<input id="r_url"></label>
+      <div class="field"><label for="r_title">Titel</label><input id="r_title" placeholder="bv. 129 Richmond"></div>
+      <div class="field"><label for="r_category">Kategorie</label><select id="r_category">${cats.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>
+      <div class="field"><label for="r_date">Datum</label><input id="r_date" type="date"></div>
+      <div class="field file-field"><label for="r_file">PDF lêer</label><input id="r_file" type="file" accept="application/pdf,.pdf"></div>
+      <div class="field"><label for="r_url">PDF URL (opsioneel)</label><input id="r_url" placeholder="https://...pdf"></div>
     </div>
-    <button class="btn" onclick="addResult()">Stoor uitslag</button>
+    <div class="notice">Gebruik óf <b>PDF lêer</b> óf <b>PDF URL</b>. As jy 'n lêer kies, laai die program dit outomaties na Supabase op.</div>
+    <div class="actions"><button class="btn" onclick="addResult()">↑ Laai uitslag op</button></div>
   </section>`;
 }
 
 function adminDocForm(){
-  return `<section class="admin-card"><h2>Jaarboek / WPU dokument</h2>
+  return `<section class="admin-card">
+    <div class="admin-card-head"><div><span class="eyebrow">04</span><h2>Jaarboek / WPU dokument</h2></div></div>
     <div class="formgrid">
-      <label>Titel<input id="d_title"></label>
-      <label>Tipe<select id="d_type"><option value="yearbook">Jaarboek</option><option value="info">Inligting</option></select></label>
-      <label>Datum<input id="d_date" type="date"></label>
-      <label>PDF lêer<input id="d_file" type="file" accept="application/pdf,.pdf"></label>
-      <label>PDF URL<input id="d_url"></label>
-      <label>Nota<input id="d_note"></label>
+      <div class="field"><label for="d_title">Titel</label><input id="d_title" placeholder="Dokument se naam"></div>
+      <div class="field"><label for="d_type">Tipe</label><select id="d_type"><option value="yearbook">Jaarboek</option><option value="info">Inligting</option></select></div>
+      <div class="field"><label for="d_date">Datum</label><input id="d_date" type="date"></div>
+      <div class="field"><label for="d_file">PDF lêer</label><input id="d_file" type="file" accept="application/pdf,.pdf"></div>
+      <div class="field"><label for="d_url">PDF URL</label><input id="d_url" placeholder="https://...pdf"></div>
+      <div class="field"><label for="d_note">Nota</label><input id="d_note" placeholder="Opsioneel"></div>
     </div>
-    <button class="btn" onclick="addDoc()">Stoor dokument</button>
+    <div class="actions"><button class="btn" onclick="addDoc()">Stoor dokument</button></div>
   </section>`;
 }
 
 function adminInfoForm(){
-  return `<section class="admin-card"><h2>WPU inligting</h2>
-    <label>Oor die WPU<textarea id="i_about">${esc(data.info.about)}</textarea></label>
-    <label>Kontak<textarea id="i_contacts">${esc(data.info.contacts)}</textarea></label>
-    <label>Bestuur<textarea id="i_management">${esc(data.info.management)}</textarea></label>
-    <label>Konstitusie / nota<textarea id="i_constitution">${esc(data.info.constitution)}</textarea></label>
-    <button class="btn" onclick="saveInfo()">Stoor WPU inligting</button>
+  return `<section class="admin-card">
+    <div class="admin-card-head"><div><span class="eyebrow">05</span><h2>WPU inligting</h2></div></div>
+    <div class="formgrid">
+      <div class="field full"><label for="i_about">Oor die WPU</label><textarea id="i_about">${esc(data.info.about)}</textarea></div>
+      <div class="field"><label for="i_contacts">Kontak</label><textarea id="i_contacts">${esc(data.info.contacts)}</textarea></div>
+      <div class="field"><label for="i_management">Bestuur</label><textarea id="i_management">${esc(data.info.management)}</textarea></div>
+      <div class="field full"><label for="i_constitution">Konstitusie / nota</label><textarea id="i_constitution">${esc(data.info.constitution)}</textarea></div>
+    </div>
+    <div class="actions"><button class="btn" onclick="saveInfo()">Stoor WPU inligting</button></div>
   </section>`;
 }
 
 function adminList(){
-  return `<section class="admin-card"><h2>Bestaande inhoud</h2>
-    <div class="small">Wenner: ${data.winners.length} • Byeenkomste: ${data.events.length} • Uitslae: ${data.results.length} • Dokumente: ${data.docs.length}</div>
-    ${data.winners.map(w=>adminRow('Wenner',w.id,w.name||w.race,'deleteWinner')).join('')}
-    ${data.events.map(e=>adminRow('Byeenkoms',e.id,e.title,'deleteEvent')).join('')}
-    ${data.results.map(r=>adminRow('Uitslag',r.id,r.title,'deleteResult')).join('')}
-    ${data.docs.map(d=>adminRow('Dokument',d.id,d.title,'deleteDoc')).join('')}
+  return `<section class="admin-card">
+    <div class="admin-card-head"><div><span class="eyebrow">06</span><h2>Bestaande inhoud</h2><p class="small">Hierdie lys wys wat tans vanaf Supabase gelaai is.</p></div>
+      <div class="counts"><span>${data.winners.length} wenners</span><span>${data.events.length} byeenkomste</span><span>${data.results.length} uitslae</span><span>${data.docs.length} dokumente</span></div>
+    </div>
+    <div class="admin-list">
+      ${data.winners.map(w=>adminRow('Wenner',w.id,w.name||w.race,'deleteWinner')).join('') || '<div class="small">Geen wenners.</div>'}
+      ${data.events.map(e=>adminRow('Byeenkoms',e.id,e.title,'deleteEvent')).join('')}
+      ${data.results.map(r=>adminRow('Uitslag',r.id,r.title,'deleteResult')).join('')}
+      ${data.docs.map(d=>adminRow('Dokument',d.id,d.title,'deleteDoc')).join('')}
+    </div>
   </section>`;
 }
 
 function adminRow(type,id,title,fn){
-  return `<div class="admin-row"><span><b>${esc(type)}</b> — ${esc(title)}</span>
-    <button class="btn danger" onclick='${fn}(${JSON.stringify(id)})'>Verwyder</button></div>`;
+  return `<div class="admin-row"><div class="admin-row-main"><span class="type-pill">${esc(type)}</span><b>${esc(title)}</b></div>
+    <button class="btn danger smallbtn" onclick='${fn}(${JSON.stringify(id)})'>Verwyder</button></div>`;
 }
 
 async function requireAdmin(){
@@ -500,6 +527,28 @@ async function cloudLoad(options={}){
   }
 }
 
+async function testCloud(){
+  const box=document.getElementById('cloud-test-result');
+  if(box){box.classList.remove('hidden'); box.textContent='Toets tans Supabase...';}
+  try{
+    await requireAdmin();
+    const checks = await Promise.all([
+      sb.from('weekly_winners').select('id',{count:'exact',head:true}),
+      sb.from('events').select('id',{count:'exact',head:true}),
+      sb.from('results').select('id',{count:'exact',head:true}),
+      sb.from('documents').select('id',{count:'exact',head:true}),
+      sb.from('wpu_info').select('id',{count:'exact',head:true})
+    ]);
+    const bad=checks.find(x=>x.error);
+    if(bad) throw bad.error;
+    cloudOnline=true;
+    if(box) box.innerHTML=`<b>Supabase OK.</b> Wenners: ${checks[0].count??0} • Byeenkomste: ${checks[1].count??0} • Uitslae: ${checks[2].count??0} • Dokumente: ${checks[3].count??0}`;
+  }catch(e){
+    cloudOnline=false;
+    if(box) box.innerHTML=`<b>Supabase-fout:</b> ${esc(e.message||e)}`;
+  }
+}
+
 async function refreshCloud(){
   const ok = await cloudLoad({forceEmpty:false});
   alert(ok ? 'Inhoud is herlaai.' : 'Supabase kon nie herlaai word nie. Plaaslike inhoud is behou.');
@@ -572,7 +621,12 @@ async function addResult(){
     await requireAdmin();
     let url=val('r_url');
     const file=document.getElementById('r_file')?.files?.[0];
-    if(file) url=await uploadMedia(file);
+    if(file){
+      const isPdf = file.type==='application/pdf' || /\.pdf$/i.test(file.name);
+      if(!isPdf) throw new Error('Kies asseblief slegs ’n PDF-lêer.');
+      if(file.size > 25*1024*1024) throw new Error('Die PDF is groter as 25 MB.');
+      url=await uploadMedia(file);
+    }
     const row={title:val('r_title'),category:val('r_category'),date:val('r_date')||null,pdf_url:url};
     if(!row.title){alert('Titel is verpligtend.');return;}
     if(!url){alert('Kies ’n PDF of plaas ’n PDF URL.');return;}
@@ -843,6 +897,7 @@ window.closeModal=closeModal;
 window.loginAdmin=loginAdmin;
 window.logoutAdmin=logoutAdmin;
 window.refreshCloud=refreshCloud;
+window.testCloud=testCloud;
 window.downloadBackup=downloadBackup;
 window.restoreBackup=restoreBackup;
 window.addWinner=addWinner;

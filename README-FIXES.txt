@@ -14,3 +14,7 @@ IMPORTANT FOR LIVE USE
 - Create the admin Auth user and add the UUID to public.admins as described in setup.sql.
 - Deploy the wpu_app folder to an HTTPS host such as Render/Netlify/Cloudflare Pages/Vercel.
 - Users then open the HTTPS app address and install it from their phone browser.
+
+7. Admin layout redesigned for desktop/mobile with separated fields, status and Supabase test.
+8. Results PDF upload validates the PDF and size before uploading to Supabase Storage.
+9. Service-worker cache bumped so phones receive the new Admin/app files.
