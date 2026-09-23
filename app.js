@@ -425,7 +425,7 @@ function adminEventForm(){
       <label>Meer foto’s <span class="small">Jy kan 1–20 foto’s gelyk kies</span><input id="e_files" type="file" accept="image/*" multiple></label>
     </div>
     <label>Beskrywing / Google Maps skakel<textarea id="e_desc"></textarea></label>
-    <button class="btn" onclick="addEvent()">Stoor byeenkoms</button>
+    <button class="btn" onclick="addEvent()">Stoor byeenkoms</button><div class="small" style="margin-top:10px">Na stoor kan jy die byeenkoms wysig en later nog foto’s byvoeg.</div>
   </section>`;
 }
 
@@ -484,11 +484,15 @@ function adminInfoForm(){
   </section>`;
 }
 
+function adminEventRow(e){
+  return `<div class="admin-row"><span><b>Byeenkoms:</b> ${esc(e.title||'')}<br><small>${esc(e.date||'')} • ${(Array.isArray(e.images)?e.images.length:0)} foto’s</small></span><span class="admin-row-actions"><button class="btn secondary" onclick='editEvent(${JSON.stringify(e.id)})'>Wysig / voeg foto’s by</button><button class="btn danger" onclick='deleteEvent(${JSON.stringify(e.id)})'>Verwyder</button></span></div>`;
+}
+
 function adminList(){
   return `<section class="admin-card"><h2>Bestaande inhoud</h2>
     <div class="small">Wenner: ${data.winners.length} • Byeenkomste: ${data.events.length} • Uitslae: ${data.results.length} • Dokumente: ${data.docs.length}</div>
     ${newestFirst(data.winners).map(w=>adminRow('Wenner',w.id,w.name||w.race,'deleteWinner')).join('')}
-    ${newestFirst(data.events).map(e=>adminRow('Byeenkoms',e.id,e.title,'deleteEvent')).join('')}
+    ${newestFirst(data.events).map(e=>adminEventRow(e)).join('')}
     ${newestFirst(data.results).map(r=>adminRow('Uitslag',r.id,r.title,'deleteResult')).join('')}
     ${newestFirst(data.docs.filter(d=>d.type!=='constitution')).map(d=>adminRow('Dokument',d.id,d.title,'deleteDoc')).join('')}
     ${(()=>{const c=data.docs.find(d=>d.type==='constitution'); return c ? adminRow('Konstitusie',c.id,c.title,'deleteDoc') : '';})()}
@@ -684,8 +688,10 @@ async function addEvent(){
       seen.add(key); uniqueFiles.push(f);
     }
     if(uniqueFiles.length){
-      const urls=await Promise.all(uniqueFiles.map(f=>uploadMedia(f)));
-      images.push(...urls);
+      for(const f of uniqueFiles){
+        const u=await uploadMedia(f);
+        if(u) images.push(u);
+      }
     }
     const row={title:val('e_title'),date:val('e_date')||null,location:val('e_location'),description:val('e_desc'),images};
     if(!row.title){alert('Naam van byeenkoms is verpligtend.');return;}
@@ -693,6 +699,59 @@ async function addEvent(){
     data.events.unshift({id:saved.id,title:saved.title,date:saved.date,location:saved.location,description:saved.description,images:saved.images||[]});
     save(); alert('Byeenkoms gestoor.'); render();
   }catch(e){alert('Kon nie stoor nie: '+e.message);}
+}
+
+async function editEvent(id){
+  try{
+    await requireAdmin();
+    const e=data.events.find(x=>String(x.id)===String(id));
+    if(!e){alert('Byeenkoms nie gevind nie.');return;}
+    const existing=Array.isArray(e.images)?e.images:[];
+    const html=`<div class="modal-backdrop" id="editEventModal" onclick="closeModal(event)">
+      <div class="gallerybox edit-event-box" onclick="event.stopPropagation()">
+        <div class="pdfhead"><div><b>Wysig byeenkoms</b><div class="meta">${esc(e.title||'')}</div></div><button class="btn danger" type="button" onclick="closeModal()">Maak toe</button></div>
+        <div class="formgrid">
+          <label>Naam<input id="ee_title" value="${esc(e.title||'')}"></label>
+          <label>Datum<input id="ee_date" type="date" value="${esc(e.date||'')}"></label>
+          <label>Plek<input id="ee_location" value="${esc(e.location||'')}"></label>
+          <label>Nuwe foto’s byvoeg<input id="ee_files" type="file" accept="image/*" multiple></label>
+        </div>
+        <label>Beskrywing / Google Maps skakel<textarea id="ee_desc">${esc(e.description||'')}</textarea></label>
+        <div class="small" style="margin:10px 0">Huidige foto’s: ${existing.length}. Die hoof-foto bly die eerste foto. Nuwe foto’s word agteraan bygevoeg.</div>
+        <div class="admin-actions"><button class="btn" type="button" onclick='saveEventEdit(${JSON.stringify(e.id)})'>Stoor veranderinge</button></div>
+      </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend',html);
+  }catch(err){alert('Kon nie wysig nie: '+err.message);}
+}
+
+async function saveEventEdit(id){
+  try{
+    await requireAdmin();
+    const e=data.events.find(x=>String(x.id)===String(id));
+    if(!e) throw new Error('Byeenkoms nie gevind nie.');
+    const title=document.getElementById('ee_title')?.value.trim()||'';
+    const date=document.getElementById('ee_date')?.value||null;
+    const location=document.getElementById('ee_location')?.value.trim()||'';
+    const description=document.getElementById('ee_desc')?.value.trim()||'';
+    if(!title){alert('Naam van byeenkoms is verpligtend.');return;}
+    let images=Array.isArray(e.images)?[...e.images]:[];
+    const files=[...(document.getElementById('ee_files')?.files||[])];
+    const seen=new Set(images);
+    let added=0;
+    for(const f of files){
+      const u=await uploadMedia(f);
+      if(u && !seen.has(u)){images.push(u);seen.add(u);added++;}
+    }
+    const payload={title,date,location,description,images};
+    const {data:saved,error}=await sb.from('events').update(payload).eq('id',id).select().single();
+    if(error) throw error;
+    data.events=data.events.map(x=>String(x.id)===String(id)?{...x,id:saved.id,title:saved.title,date:saved.date,location:saved.location,description:saved.description,images:Array.isArray(saved.images)?saved.images:images}:x);
+    save();
+    closeModal();
+    alert(added?`Byeenkoms opgedateer. ${added} nuwe foto’s bygevoeg.`:'Byeenkoms opgedateer.');
+    render();
+  }catch(err){alert('Kon nie byeenkoms wysig nie: '+err.message);}
 }
 
 async function addResult(){
@@ -1046,6 +1105,8 @@ window.addDoc=addDoc;
 window.saveInfo=saveInfo;
 window.deleteWinner=deleteWinner;
 window.deleteEvent=deleteEvent;
+window.editEvent=editEvent;
+window.saveEventEdit=saveEventEdit;
 window.deleteResult=deleteResult;
 window.deleteDoc=deleteDoc;
 
