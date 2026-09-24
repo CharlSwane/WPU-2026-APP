@@ -278,25 +278,16 @@ function eventsPage(a){
     <div class="grid">${newestFirst(currentYearOnly(data.events)).map(eventCard).join('') || empty()}</div>`;
 }
 
-function eventImages(e){
-  let imgs = e && e.images;
-  if(typeof imgs === 'string'){
-    try { imgs = JSON.parse(imgs); } catch(_) { imgs = [imgs]; }
-  }
-  return Array.isArray(imgs) ? imgs.filter(u => typeof u === 'string' && u.trim()) : [];
-}
-
 function eventCard(e){
-  const imgs = eventImages(e);
-  const thumbs = imgs.slice(0,4).map((u,i)=>`<img class="event-thumb" src="${esc(u)}" alt="Foto ${i+1}" loading="lazy" onerror="this.style.display='none'">`).join('');
+  const imgs = Array.isArray(e.images) ? e.images : [];
   return `<article class="card event-card">
-    ${imgs[0] ? `<button class="event-photo-button" type="button" onclick='viewEvent(${JSON.stringify(e.id)})' aria-label="Wys foto’s"><img class="event-img" src="${esc(imgs[0])}" alt="" loading="eager" onerror="this.style.display='none'"></button>` : `<div class="event-img placeholder"></div>`}
-    ${imgs.length>1 ? `<div class="event-thumb-strip">${thumbs}</div>` : ''}
+    ${imgs[0] ? `<img class="event-img" src="${esc(imgs[0])}" onclick='viewEvent(${JSON.stringify(e.id)})' alt="" loading="lazy">`
+      : `<div class="event-img placeholder"></div>`}
     <div class="body">
       <div class="meta">${esc(e.date)}${e.location?' • '+esc(e.location):''}</div>
       <h3>${esc(e.title)}</h3>
       <p>${mapsHtml(e.description||'')}</p>
-      ${imgs.length>1 ? `<button class="btn secondary" type="button" onclick='viewEvent(${JSON.stringify(e.id)})'>Wys al ${imgs.length} foto’s</button>` : ''}
+      ${imgs.length>1 ? `<button class="btn secondary" type="button" onclick='viewEvent(${JSON.stringify(e.id)})'>View ${imgs.length-1} ekstra foto’s</button>` : ''}
     </div>
   </article>`;
 }
@@ -318,16 +309,17 @@ function mapsHtml(text){
 function viewEvent(id){
   const e = data.events.find(x=>String(x.id)===String(id));
   if(!e) return;
-  const imgs = eventImages(e);
-  if(!imgs.length){
-    alert('Daar is geen foto’s om te wys nie.');
+  const imgs = Array.isArray(e.images) ? e.images : [];
+  const extras = imgs.slice(1);
+  if(!extras.length){
+    alert('Daar is geen ekstra foto’s om te wys nie.');
     return;
   }
   const html = `<div class="modal-backdrop" onclick="closeModal(event)">
     <div class="gallerybox" onclick="event.stopPropagation()">
       <div class="pdfhead"><div><b>${esc(e.title)}</b><div class="meta">${esc(e.date||'')}</div></div><button class="btn danger" onclick="closeModal()">Maak toe</button></div>
-      <div class="gallerymain"><img src="${esc(imgs[0])}" alt="Foto 1" id="galleryMainImage" onerror="this.alt='Foto kon nie laai nie'"></div>
-      <div class="gallerythumbs">${imgs.map((u,i)=>`<img src="${esc(u)}" alt="Foto ${i+1}" loading="lazy" onclick='document.getElementById("galleryMainImage").src=${JSON.stringify(u)}'>`).join('')}</div>
+      <div class="gallerymain"><img src="${esc(extras[0])}" alt="" id="galleryMainImage"></div>
+      <div class="gallerythumbs">${extras.map((u,i)=>`<img src="${esc(u)}" alt="Foto ${i+1}" onclick='document.getElementById("galleryMainImage").src=${JSON.stringify(u)}'>`).join('')}</div>
     </div>
   </div>`;
   document.body.insertAdjacentHTML('beforeend',html);
@@ -799,7 +791,26 @@ async function saveOverall(){
       best_bird_pdf_url:bird || existing?.best_bird_url || null,
       updated_at:new Date().toISOString()
     };
-    const saved=await cloudUpsert('weekly_overalls',row,'category,year');
+    // Do not rely on PostgreSQL ON CONFLICT(category,year) here.
+    // Some existing WPU databases may not yet have the matching unique
+    // constraint/index. Find the record first, then UPDATE or INSERT by id.
+    let saved;
+    if(existing?.id){
+      const {data:updated,error}=await sb.from('weekly_overalls')
+        .update(row)
+        .eq('id',existing.id)
+        .select()
+        .single();
+      if(error) throw error;
+      saved=updated;
+    }else{
+      const {data:inserted,error}=await sb.from('weekly_overalls')
+        .insert(row)
+        .select()
+        .single();
+      if(error) throw error;
+      saved=inserted;
+    }
     const mapped={id:saved.id,category:saved.category,date:saved.date,year:saved.year,champion_url:saved.champion_pdf_url,best_bird_url:saved.best_bird_pdf_url};
     data.overalls=[...data.overalls.filter(x=>!(x.category===category && itemYear(x)===year)),mapped];
     save(); alert(`${category} se algehele PDFs is gestoor/oorgeskryf.`); render();
@@ -1035,14 +1046,19 @@ async function restoreBackup(input){
     }
 
     for(const o of incoming.overalls){
-      await cloudUpsert('weekly_overalls',{
-        id:restoreId('weekly_overalls',o.id),
+      const overallId=restoreId('weekly_overalls',o.id);
+      const overallRow={
+        id:overallId,
         category:o.category||'WPU',
+        year:Number(o.year)||itemYear(o)||new Date().getFullYear(),
         date:o.date||null,
         champion_pdf_url:o.champion_url||null,
         best_bird_pdf_url:o.best_bird_url||null,
         updated_at:new Date().toISOString()
-      },'category');
+      };
+      // Restore by stable id; do not depend on category/category-year
+      // conflict inference.
+      await cloudUpsert('weekly_overalls',overallRow,'id');
     }
 
     await cloudUpsert('wpu_info',{
