@@ -165,6 +165,11 @@ function go(p){
   cat = 'ALL';
   render();
   window.scrollTo(0,0);
+  // Fetch the latest cloud content whenever a user opens a content page.
+  // This is intentionally not limited to admin users: phones/PWAs are public clients.
+  if (sb && ['home','winners','results','yearbook','events','documents','archives','info'].includes(p)) {
+    refreshCloudSilently();
+  }
 }
 
 function render(){
@@ -624,6 +629,29 @@ async function refreshCloud(){
   const ok = await cloudLoad({forceEmpty:false});
   alert(ok ? 'Inhoud is herlaai.' : 'Supabase kon nie herlaai word nie. Plaaslike inhoud is behou.');
   render();
+}
+
+let refreshInProgress = false;
+let lastRefreshAt = 0;
+async function refreshCloudSilently(force=false){
+  if(!sb || restoreInProgress || refreshInProgress) return false;
+  const now=Date.now();
+  if(!force && now-lastRefreshAt < 5000) return false;
+  refreshInProgress=true;
+  lastRefreshAt=now;
+  try{
+    const before=JSON.stringify(data);
+    const ok=await cloudLoad({forceEmpty:false});
+    if(ok && JSON.stringify(data)!==before){
+      render();
+    }
+    return ok;
+  }catch(e){
+    console.warn('Silent cloud refresh skipped:',e);
+    return false;
+  }finally{
+    refreshInProgress=false;
+  }
 }
 
 async function loginAdmin(){
@@ -1142,29 +1170,26 @@ if(sb){
   }).catch(()=>render());
   sb.auth.onAuthStateChange((_event,session)=>{
     currentUser=session?.user||null;
-    if(currentUser) cloudLoad({forceEmpty:false}).then(render);
-    else render();
+    refreshCloudSilently(true).then(()=>render());
   });
 }
 
 render();
 
-/* Keep the app current, but do not wipe useful local data when cloud is empty. */
+/* Keep live content fresh for ALL users, including phones that are not logged in.
+   The PWA caches only the app shell; these Supabase queries fetch current content. */
 let restoreInProgress=false;
 
-setInterval(async()=>{
+setInterval(()=>{
   if(sb && document.visibilityState!=='hidden' && !restoreInProgress){
-    try{
-      const {data:sessionData}=await sb.auth.getSession();
-      if(!sessionData?.session) return;
-
-      const before=JSON.stringify(data);
-      const ok=await cloudLoad({forceEmpty:false});
-      if(ok && JSON.stringify(data)!==before) render();
-    }catch(e){
-      console.warn('Background cloud refresh skipped:',e);
-    }
+    refreshCloudSilently(false);
   }
-},60000);
+},15000);
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible') refreshCloudSilently(true);
+});
+window.addEventListener('focus',()=>refreshCloudSilently(true));
+window.addEventListener('pageshow',()=>refreshCloudSilently(true));
 
 })();
