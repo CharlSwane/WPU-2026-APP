@@ -491,42 +491,18 @@ async function geocodePlace(q){
   return {lat:Number(a[0].lat),lon:Number(a[0].lon),name,municipality,town};
 }
 
-const OLD_DISTRICT_BY_MUNICIPALITY={
-  Tokologo:'Boshof Distrik',
-  Nala:'Bothaville Distrik',
-  Tswelopele:'Bultfontein Distrik',
-  Masilonyana:'Brandfort Distrik',
-  JBMarks:'Potchefstroom Distrik',
-  // Common Northern Cape/Free State legacy district labels.
-  'Sol Plaatje':'Kimberley Distrik',
-  Phokwane:'Hartswater Distrik',
-  Dikgatlong:'Barkly West Distrik',
-  Magareng:'Warrenton Distrik',
-  Renosterberg:'Philipstown Distrik',
-  Siyathemba:'Prieska Distrik',
-  Umsobomvu:'Colesberg Distrik',
-  Emthanjeni:'De Aar Distrik',
-  Thembelihle:'Hopetown Distrik',
-  Kareeberg:'Vanwyksvlei Distrik',
-  Renosterberg:'Philipstown Distrik'
-};
-function oldDistrictName(municipality,town,county){
-  const key=String(municipality||'').replace(/\s+/g,' ').trim();
-  if(OLD_DISTRICT_BY_MUNICIPALITY[key]) return OLD_DISTRICT_BY_MUNICIPALITY[key];
-  // When the geocoder still supplies the historical magisterial/county name, use it.
-  if(county && /district|magisterial|munisip/i.test(county)) return county.replace(/ municipality/ig,'').trim()+' Distrik';
-  if(town) return town+' Distrik';
-  return '';
-}
 async function reversePlace(lat,lon){
   try{
-    const u=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&lat=${lat}&lon=${lon}`;
-    const r=await fetch(u,{headers:{'Accept':'application/json'}}); if(!r.ok) return {name:'Roetepunt',district:''};
+    const u=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&lat=${lat}&lon=${lon}&addressdetails=1`;
+    const r=await fetch(u,{headers:{'Accept':'application/json'}}); if(!r.ok) return 'Roetepunt';
     const j=await r.json(); const a=j.address||{};
-    const town=a.town||a.village||a.city||a.suburb||a.city_district||'';
-    const district=oldDistrictName(a.municipality||a.city_district||'',town,a.county||'');
-    return {name:town||a.municipality||a.county||'Roetepunt',district};
-  }catch{return {name:'Roetepunt',district:''};}
+    // Keep the familiar/local town name. Do NOT show the new municipal name.
+    // For the three route points, add the familiar district-style description
+    // in brackets, e.g. "Boshof (Boshof Distrik)".
+    const town=a.town||a.village||a.city||a.city_district||a.suburb||a.county||'Roetepunt';
+    if(!town || town==='Roetepunt') return 'Roetepunt';
+    return `${town} (${town} Distrik)`;
+  }catch{return 'Roetepunt';}
 }
 function interpolate(a,b,t){return {lat:a.lat+(b.lat-a.lat)*t,lon:a.lon+(b.lon-a.lon)*t};}
 
@@ -576,7 +552,7 @@ async function runWeatherForecast(){
   try{
     const [A,B]=await Promise.all([geocodePlace(from),geocodePlace(to)]);
     const points=[0,0.25,0.5,0.75,1].map(t=>interpolate(A,B,t));
-    const named=await Promise.all(points.map(async(p,i)=>i===0?{name:A.name,district:A.municipality||''}:i===4?{name:B.name,district:B.municipality||''}:reversePlace(p.lat,p.lon)));
+    const named=await Promise.all(points.map(async(p,i)=>i===0?A.name:i===4?B.name:reversePlace(p.lat,p.lon)));
     const totalKm=haversineKm(A,B), bearing=bearingBetween(A,B), baseMpm=1250;
 
     const settled=await Promise.all(WEATHER_MODELS.map(async model=>{
@@ -607,7 +583,7 @@ async function runWeatherForecast(){
         code:weatherModels.length?weatherModels.map(x=>x.code).filter(Number.isFinite).sort((a,b)=>b-a)[0]:null
       };
       const speedInfo=estimateSpeed(baseMpm,w,bearing);
-      route.push({...w,name:named[i].name,district:named[i].district,lat:points[i].lat,lon:points[i].lon,eta,speed:speedInfo.speed,tail:speedInfo.tail,cross:speedInfo.cross,elapsed:elapsedMin});
+      route.push({...w,name:named[i],lat:points[i].lat,lon:points[i].lon,eta,speed:speedInfo.speed,tail:speedInfo.tail,cross:speedInfo.cross,elapsed:elapsedMin});
       if(i<points.length-1){
         const legKm=haversineKm(points[i],points[i+1]);
         elapsedMin += (legKm*1000)/speedInfo.speed;
@@ -644,7 +620,7 @@ async function runWeatherForecast(){
     const cards=route.map((w,i)=>{
       const risks=weatherRiskText(w);
       const windText=w.wind==null?'—':`${Math.round(w.wind)} km/h ${w.dir==null?'':windCardinal(w.dir)}`;
-      return `<article class="weather-card"><h3>${esc(w.name||'Roetepunt '+(i+1))}</h3>${w.district?`<div class="small"><b>(${esc(w.district)})</b></div>`:''}<div><b>🕐 ETA ${formatClock(w.eta)}</b></div><div><b>🌡️ ${w.temp==null?'—':w.temp.toFixed(0)+'°C'}</b> • ${weatherCodeText(w.code)}</div><div>💨 Wind: <b>${windText}</b></div><div>🕊️ ${esc(windHumanDescription(w,bearing))}</div><div>🐦 Geskatte spoed: <b>${Math.round(w.speed).toLocaleString('af-ZA')} m/min</b></div><div>☁️ Wolke: <b>${w.cloud==null?'—':Math.round(w.cloud)+'%'}</b> • 🌧️ Reënkans: <b>${w.rain==null?'—':Math.round(w.rain)+'%'}</b></div>${risks.length?`<div style="margin-top:7px"><b>⚠️ ${risks.join(' • ')}</b></div>`:''}</article>`;
+      return `<article class="weather-card"><h3>${esc(w.name||'Roetepunt '+(i+1))}</h3><div><b>🕐 ETA ${formatClock(w.eta)}</b></div><div><b>🌡️ ${w.temp==null?'—':w.temp.toFixed(0)+'°C'}</b> • ${weatherCodeText(w.code)}</div><div>💨 Wind: <b>${windText}</b></div><div>🕊️ ${esc(windHumanDescription(w,bearing))}</div><div>🐦 Geskatte spoed: <b>${Math.round(w.speed).toLocaleString('af-ZA')} m/min</b></div><div>☁️ Wolke: <b>${w.cloud==null?'—':Math.round(w.cloud)+'%'}</b> • 🌧️ Reënkans: <b>${w.rain==null?'—':Math.round(w.rain)+'%'}</b></div>${risks.length?`<div style="margin-top:7px"><b>⚠️ ${risks.join(' • ')}</b></div>`:''}</article>`;
     }).join('');
     const warning=unavailable?`<div class="notice"><b>Let wel:</b> Een of meer modelle het nie data beskikbaar gehad nie. Die berekening gebruik: <b>${modelLabel}</b>.<br><span class="small">${unavailable}</span></div>`:'';
     out.innerHTML=`<section class="admin-card"><h2>🌦️ ${esc(A.name)} → ${esc(B.name)}</h2><p><b>${esc(date)}</b> • <b>Loslaattyd: ${esc(time)}</b> • Roetebearing: <b>${Math.round(bearing)}°</b> • Afstand: <b>${totalKm.toFixed(1)} km</b></p><div id="weatherMap"></div><h3 style="margin-top:18px">Voorspelling volgens werklike geskatte vliegtyd</h3><div class="weather-summary">${cards}</div>${warning}<div class="notice" style="margin-top:16px"><h3 style="margin:0 0 8px">📋 Opsomming</h3><div><b>Basisspoed:</b> 1 250 m/min op ’n windstil dag.</div><div><b>Geskatte aankomst:</b> ${formatClock(arrival)} • ongeveer ${Math.round(totalMin)} minute se vliegtyd.</div><div style="margin-top:8px">${summary.map(x=>`<div>• ${esc(x)}</div>`).join('')}</div><div class="small" style="margin-top:8px">Die spoed is ’n roete-skatting wat wind en hitte in ag neem; werklike duiwe se spoed kan aansienlik verskil.</div></div><div class="notice"><b>Hoe om dit te lees:</b> die loslaatpunt se weer word op die gekose loslaattyd bereken. Daarna word die geskatte vliegtyd gebruik om die voorspelling by elke volgende roetepunt te kies, sodat die eindpunt se weer nader aan die verwagte aankomstyd is.</div><div class="weather-source">Bronne/modelle: Open-Meteo; plekname/kaart: OpenStreetMap.</div></section>`;
@@ -655,7 +631,7 @@ async function runWeatherForecast(){
       const line=L.polyline([[A.lat,A.lon],[B.lat,B.lon]],{weight:5}).addTo(map);
       L.marker([A.lat,A.lon]).addTo(map).bindPopup('<b>Loslaatpunt</b><br>'+esc(A.name)+'<br>Loslaattyd: '+esc(time));
       L.marker([B.lat,B.lon]).addTo(map).bindPopup('<b>Eindpunt</b><br>'+esc(B.name)+'<br>Geskatte aankoms: '+formatClock(arrival));
-      route.forEach(w=>L.circleMarker([w.lat,w.lon],{radius:7,weight:2}).addTo(map).bindPopup('<b>'+esc(w.name)+'</b>'+(w.district?'<br><i>('+esc(w.district)+')</i>':'')+'<br>ETA '+formatClock(w.eta)+'<br>'+Math.round(w.temp||0)+'°C • Wind '+Math.round(w.wind||0)+' km/h • '+Math.round(w.speed)+' m/min'));
+      route.forEach(w=>L.circleMarker([w.lat,w.lon],{radius:7,weight:2}).addTo(map).bindPopup('<b>'+esc(w.name)+'</b><br>ETA '+formatClock(w.eta)+'<br>'+Math.round(w.temp||0)+'°C • Wind '+Math.round(w.wind||0)+' km/h • '+Math.round(w.speed)+' m/min'));
       map.fitBounds(line.getBounds(),{padding:[25,25]});
     },50);
   }catch(e){console.error(e);out.innerHTML=`<div class="empty"><b>Die voorspelling kon nie voltooi word nie.</b><br>${esc(weatherErrorMessage(e,'Onbekende weerfout.'))}</div>`;}
