@@ -167,6 +167,7 @@ function nav(){
     ['documents','Dokumente'],
     ['archives','Argiewe'],
     ['info','WPU Inligting'],
+    ['weather','🌦️ Weervoorspelling'],
     ['admin','Admin']
   ];
   el.innerHTML = items.map(([p,label]) =>
@@ -194,7 +195,7 @@ function render(){
   nav();
   const a = document.querySelector('#app');
   if (!a) return;
-  const fn = {home:home,winners:winPage,results:resultsPage,yearbook:yearbook,events:eventsPage,documents:documentsPage,archives:archivesPage,info:infoPage,admin:adminPage}[page] || home;
+  const fn = {home:home,winners:winPage,results:resultsPage,yearbook:yearbook,events:eventsPage,documents:documentsPage,archives:archivesPage,info:infoPage,weather:weatherPage,admin:adminPage}[page] || home;
   try { fn(a); }
   catch(e) {
     console.error(e);
@@ -209,6 +210,11 @@ function home(a){
       <img src="assets/wpu-logo.jpg" alt="WPU">
       <div><h1>WPU ${activeYear()}</h1><p>Jou digitale jaarboek, weeklikse wenners, uitslae en byeenkomste.</p></div>
     </section>
+    <div class="weather-home-card" style="margin-top:18px;background:white;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 5px 20px #17362b0b">
+      <h2 style="margin:0 0 8px">🌦️ Wedvlug-weervoorspelling</h2>
+      <p style="margin:0 0 12px;color:var(--muted)">Kies die loslaatpunt, eindpunt en datum om die weer op die roete te sien.</p>
+      <button class="btn" onclick="go('weather')">Maak weervoorspelling oop</button>
+    </div>
     <h2>🏆 Weeklikse wenners</h2>
     <div class="grid">${ws.map(winnerCard).join('') || empty()}</div>
     <h2>📊 Jongste uitslae</h2>${resultList(newestFirst(currentYearOnly(data.results)).slice(0,5))}
@@ -384,6 +390,101 @@ function infoPage(a){
 
 function nl2br(s){
   return esc(s).replace(/\r?\n/g,'<br>');
+}
+
+const WEATHER_MODELS=[
+  {id:'ecmwf_ifs025',name:'ECMWF'},
+  {id:'gfs_seamless',name:'NOAA GFS'},
+  {id:'icon_seamless',name:'DWD ICON'}
+];
+
+function weatherCodeText(code){
+  const m={0:'Helder',1:'Meestal helder',2:'Gedeeltelik bewolk',3:'Bewolk',45:'Mis',48:'Mis / rypmis',51:'Ligte motreën',53:'Motreën',55:'Swaar motreën',61:'Ligte reën',63:'Reën',65:'Swaar reën',71:'Ligte sneeu',73:'Sneeu',75:'Swaar sneeu',80:'Ligte buie',81:'Buie',82:'Swaar buie',95:'Donderstorms',96:'Donderstorm met hael',99:'Donderstorm met swaar hael'};
+  return m[code]||'Onbekende toestande';
+}
+function windDir(deg){const dirs=['N','NO','O','SO','S','SW','W','NW'];return dirs[Math.round((Number(deg)||0)/45)%8];}
+function weatherPointSummary(models,i){
+  const vals=models.map(m=>m?.hourly?.temperature_2m?.[i]).filter(v=>Number.isFinite(v));
+  const winds=models.map(m=>m?.hourly?.wind_speed_10m?.[i]).filter(v=>Number.isFinite(v));
+  const dirs=models.map(m=>m?.hourly?.wind_direction_10m?.[i]).filter(v=>Number.isFinite(v));
+  const clouds=models.map(m=>m?.hourly?.cloud_cover?.[i]).filter(v=>Number.isFinite(v));
+  const rain=models.map(m=>m?.hourly?.precipitation_probability?.[i]).filter(v=>Number.isFinite(v));
+  const codes=models.map(m=>m?.hourly?.weather_code?.[i]).filter(v=>Number.isFinite(v));
+  const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+  const modeCode=codes.length?codes.sort((a,b)=>codes.filter(x=>x===b).length-codes.filter(x=>x===a).length)[0]:null;
+  return {temp:avg(vals),wind:avg(winds),dir:avg(dirs),cloud:avg(clouds),rain:avg(rain),code:modeCode};
+}
+
+async function geocodePlace(q){
+  const url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=za&q='+encodeURIComponent(q);
+  const r=await fetch(url,{headers:{'Accept':'application/json'}});
+  if(!r.ok) throw new Error('Kon nie die plek opspoor nie: '+q);
+  const a=await r.json();
+  if(!a.length) throw new Error(`Plek nie gevind nie: ${q}`);
+  return {lat:Number(a[0].lat),lon:Number(a[0].lon),name:a[0].display_name.split(',')[0]};
+}
+async function reversePlace(lat,lon){
+  try{
+    const u=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&lat=${lat}&lon=${lon}`;
+    const r=await fetch(u,{headers:{'Accept':'application/json'}}); if(!r.ok) return 'Roetepunt';
+    const j=await r.json(); const a=j.address||{};
+    return a.town||a.city||a.village||a.municipality||a.county||'Roetepunt';
+  }catch{return 'Roetepunt';}
+}
+function interpolate(a,b,t){return {lat:a.lat+(b.lat-a.lat)*t,lon:a.lon+(b.lon-a.lon)*t};}
+function isoHour(date,time){return `${date}T${time}:00`}
+async function fetchWeatherModel(model,points,date,time){
+  const lat=points.map(p=>p.lat).join(','),lon=points.map(p=>p.lon).join(',');
+  const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,precipitation_probability,precipitation&models=${model}&timezone=Africa%2FJohannesburg&start_date=${date}&end_date=${date}`;
+  const r=await fetch(url); if(!r.ok) throw new Error(`${model} weerdiens het nie data teruggestuur nie.`);
+  return await r.json();
+}
+async function weatherPage(a){
+  a.innerHTML=`<h1>🌦️ Wedvlug-weervoorspelling</h1>
+  <section class="admin-card"><p style="margin-top:0;color:var(--muted)">Die app trek drie onafhanklike numeriese weermodelle — <b>ECMWF</b>, <b>NOAA GFS</b> en <b>DWD ICON</b> — en wys die verskille/saamgestelde prentjie vir die roete. Open-Meteo bied hierdie modelle in sy forecast API aan.</p>
+    <div class="weather-form">
+      <label>Loslaatpunt<input id="wx_from" placeholder="bv. Richmond"></label>
+      <label>Eindpunt<input id="wx_to" placeholder="bv. Potchefstroom"></label>
+      <label>Loslaatdatum<input id="wx_date" type="date" value="${new Date().toISOString().slice(0,10)}"></label>
+      <label>Loslaattijd<input id="wx_time" type="time" value="07:00"></label>
+      <div class="full"><button class="btn" onclick="runWeatherForecast()">🔎 Kry weervoorspelling</button></div>
+    </div>
+  </section><div id="weatherResult"></div>`;
+}
+async function runWeatherForecast(){
+  const out=document.getElementById('weatherResult'); if(!out)return;
+  const from=document.getElementById('wx_from').value.trim(),to=document.getElementById('wx_to').value.trim(),date=document.getElementById('wx_date').value,time=document.getElementById('wx_time').value||'07:00';
+  if(!from||!to||!date){alert('Vul die loslaatpunt, eindpunt en datum in.');return;}
+  const today=new Date(); today.setHours(0,0,0,0); const chosen=new Date(date+'T00:00:00'); const diff=Math.round((chosen-today)/86400000);
+  if(diff<0||diff>15){alert('Hierdie voorspelling werk vir vandag tot 15 dae vooruit.');return;}
+  out.innerHTML='<div class="weather-loading">⏳ Ek soek die twee plekke, bou die reguit roete en vergelyk drie weermodelle...</div>';
+  try{
+    const [A,B]=await Promise.all([geocodePlace(from),geocodePlace(to)]);
+    const points=[0.1,0.3,0.5,0.7,0.9].map(t=>interpolate(A,B,t));
+    const named=await Promise.all(points.map(p=>reversePlace(p.lat,p.lon)));
+    const [ec,gfs,icon]=await Promise.all(WEATHER_MODELS.map(m=>fetchWeatherModel(m,points,date,time)));
+    const modelData=[ec,gfs,icon].map(x=>Array.isArray(x)?x:[x]);
+    const targetHour=time.slice(0,2)+':'+time.slice(3,5);
+    const summaries=[];
+    for(let i=0;i<points.length;i++){
+      const models=modelData.map(m=>m[i]);
+      const idx=models[0]?.hourly?.time?.findIndex(t=>t.endsWith(targetHour+':00'));
+      summaries.push({...weatherPointSummary(models,idx>=0?idx:0),name:named[i],lat:points[i].lat,lon:points[i].lon});
+    }
+    const mapHtml='<div id="weatherMap"></div>';
+    const cards=summaries.map((w,i)=>`<article class="weather-card"><h3>${esc(w.name||'Roetepunt '+(i+1))}</h3><div><b>🌡️ ${w.temp==null?'—':w.temp.toFixed(0)+'°C'}</b> • ${weatherCodeText(w.code)}</div><div>☁️ Wolke: <b>${w.cloud==null?'—':Math.round(w.cloud)+'%'}</b></div><div>💨 Wind: <b>${w.wind==null?'—':Math.round(w.wind)+' km/h'} ${w.dir==null?'':windDir(w.dir)}</b></div><div>🌧️ Reënkans: <b>${w.rain==null?'—':Math.round(w.rain)+'%'}</b></div><div class="small">${WEATHER_MODELS.map((m,j)=>m.name+': '+(modelData[j][i]?.hourly?.wind_speed_10m?.[0]!=null?Math.round(modelData[j][i].hourly.wind_speed_10m[0])+' km/h':'—')).join(' • ')}</div></article>`).join('');
+    out.innerHTML=`<section class="admin-card"><h2>🌦️ ${esc(A.name)} → ${esc(B.name)}</h2><p><b>${esc(date)}</b> om <b>${esc(time)}</b> • Reguitlyn tussen loslaatpunt en eindpunt. Die 5 gemerkte punte gee 'n maklik-leesbare roete-oorsig.</p>${mapHtml}<div class="weather-summary">${cards}</div><div class="notice"><b>Hoe om dit te lees:</b> kyk veral na die windrigting teenoor die duif se vliegrigting, windspoed/-sterkte, wolkbedekking en reënkans. Die drie modelle is 'n vergelyking van voorspelde toestande, nie 'n waarborg van die werklike weer nie.</div><div class="weather-source">Bronne/modelle: ECMWF, NOAA GFS en DWD ICON via Open-Meteo; plekname/kaart: OpenStreetMap. citeturn1search0turn1search1</div></section>`;
+    setTimeout(()=>{
+      if(!window.L)return;
+      const map=L.map('weatherMap').setView([(A.lat+B.lat)/2,(A.lon+B.lon)/2],6);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+      const line=L.polyline([[A.lat,A.lon],[B.lat,B.lon]],{weight:5}).addTo(map);
+      L.marker([A.lat,A.lon]).addTo(map).bindPopup('<b>Loslaatpunt</b><br>'+esc(A.name));
+      L.marker([B.lat,B.lon]).addTo(map).bindPopup('<b>Eindpunt</b><br>'+esc(B.name));
+      summaries.forEach((w,i)=>L.circleMarker([w.lat,w.lon],{radius:7,weight:2}).addTo(map).bindPopup('<b>'+esc(w.name)+'</b><br>'+Math.round(w.temp||0)+'°C • Wind '+Math.round(w.wind||0)+' km/h'));
+      map.fitBounds(line.getBounds(),{padding:[25,25]});
+    },50);
+  }catch(e){console.error(e);out.innerHTML=`<div class="empty"><b>Die voorspelling kon nie voltooi word nie.</b><br>${esc(e.message)}</div>`;}
 }
 
 function adminPage(a){
@@ -565,10 +666,19 @@ async function requireAdmin(){
 async function uploadMedia(file){
   if(!file) return '';
   await requireAdmin();
-  const ext = (file.name.split('.').pop()||'bin').toLowerCase();
-  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const {error} = await sb.storage.from('wpu-media').upload(path,file,{upsert:false,contentType:file.type||undefined});
-  if(error) throw error;
+  if(!(file instanceof File)) throw new Error('Ongeldige lêer.');
+  if(file.size<=0) throw new Error('Die gekose lêer is leeg.');
+  const original=(file.name||'document').trim();
+  const ext=(original.split('.').pop()||'bin').toLowerCase();
+  const isPdf=ext==='pdf' || file.type==='application/pdf';
+  const safeExt=isPdf?'pdf':ext.replace(/[^a-z0-9]/g,'')||'bin';
+  const mime=isPdf?'application/pdf':(file.type||'application/octet-stream');
+  const path=`${Date.now()}-${Math.random().toString(36).slice(2)}.${safeExt}`;
+  const {error}=await sb.storage.from('wpu-media').upload(path,file,{upsert:false,contentType:mime,cacheControl:'3600'});
+  if(error){
+    console.error('WPU storage upload error:',error);
+    throw new Error(`PDF/lêer kon nie na WPU Media opgelaai word nie: ${error.message||error.error_description||'Storage-fout'}`);
+  }
   return sb.storage.from('wpu-media').getPublicUrl(path).data.publicUrl;
 }
 

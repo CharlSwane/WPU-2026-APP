@@ -23,7 +23,7 @@ h2{margin:28px 0 13px}.grid{display:grid;grid-template-columns:repeat(auto-fit,m
 .winner-img{display:block;object-fit:contain;object-position:center;width:100%;aspect-ratio:4/3;padding:10px;background:#f4f6f5}
 .adminitem{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
 .adminitem .actions{margin-top:0}
-.maplink{display:inline-block;margin-top:8px;padding:8px 11px;border-radius:10px;background:#edf7f1;color:var(--green);font-weight:800;text-decoration:none}
+#weatherMap{height:460px;border-radius:16px;border:1px solid var(--line);overflow:hidden;margin:16px 0}.weather-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.weather-card{background:white;border:1px solid var(--line);border-radius:14px;padding:14px}.weather-card h3{margin:0 0 8px}.weather-source{font-size:11px;color:var(--muted);margin-top:8px}.weather-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.weather-form label{display:flex;flex-direction:column;gap:7px;font-weight:750}.weather-form input{min-height:48px;padding:12px 14px;border:1px solid #cbd5cf;border-radius:11px;font:inherit}.weather-form .full{grid-column:1/-1}.weather-loading{padding:18px;text-align:center;background:#edf4f0;border-radius:12px}.wind-arrow{font-weight:900}.maplink{display:inline-block;margin-top:8px;padding:8px 11px;border-radius:10px;background:#edf7f1;color:var(--green);font-weight:800;text-decoration:none}
 .gallerybox{width:min(1000px,100%);height:min(92vh,900px);background:white;border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
 .gallerymain{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:#111;padding:10px}
 .gallerymain img{max-width:100%;max-height:100%;object-fit:contain}
@@ -66,5 +66,7 @@ footer{text-align:center;padding:25px;color:var(--muted);font-size:12px}
 <body>
 <header><div class="top"><img class="logo" src="assets/wpu-logo.jpg"><div class="brand">WESTELIKE POSDUIF UNIE<small>WPU 2026 • Jaarboek & Nuus • 🟢 LIVE</small></div></div><nav id="nav"></nav></header>
 <main id="app"></main><footer>Westelike Posduif Unie • 2026</footer>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js" onerror=""></script><script src="app.js"></script>
 </body></html>

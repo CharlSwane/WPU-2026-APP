@@ -1,0 +1,25 @@
+WPU 2026 – PDF DOKUMENTE EN WEERVOORSPELLING
+
+1. PDF DOKUMENTE
+Die gewone Dokumente-blad gebruik dieselfde wpu-media Supabase Storage bucket.
+As PDF's nie opgaan nie, voer RLS-FIX.sql weer in Supabase SQL Editor uit.
+Die Storage policy gee authenticated admins toegang tot INSERT/UPDATE/DELETE en public SELECT.
+
+2. WEERVOORSPELLING
+Die homepage het nou 'n 🌦️ Weervoorspelling afdeling.
+Die gebruiker kies:
+- Loslaatpunt
+- Eindpunt
+- Loslaatdatum
+- Loslaattijd (standaard 07:00)
+
+Die app:
+- geokodeer die twee plekke
+- trek 'n reguit lyn tussen die punte
+- wys 'n kaart met die lyn en 5 roetepunte/dorpe
+- vergelyk ECMWF, NOAA GFS en DWD ICON-modelle via Open-Meteo
+- wys temperatuur, wolke, windrigting/-spoed en reënkans vir die 5 punte
+- werk vir vandag tot 15 dae vooruit
+
+Geen OpenAI/Google Maps/weer-API sleutel is nodig vir hierdie weerfunksie nie.
+Leaflet en OpenStreetMap word vir die kaart gebruik.
