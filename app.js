@@ -13,7 +13,25 @@ let cloudSnapshot = null;
 
 try {
   if (CONFIG.supabaseUrl && CONFIG.supabaseAnonKey && window.supabase) {
-    sb = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
+    /*
+      IMPORTANT: Supabase content must never be served from the phone/browser
+      HTTP cache. The PWA shell may be cached, but the database queries must
+      always go back to Supabase for the latest results.
+    */
+    const noCacheFetch = (input, init = {}) => {
+      const headers = new Headers(init.headers || {});
+      headers.set('Cache-Control', 'no-cache, no-store, max-age=0');
+      headers.set('Pragma', 'no-cache');
+      return fetch(input, {
+        ...init,
+        cache: 'no-store',
+        headers
+      });
+    };
+
+    sb = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey, {
+      global: { fetch: noCacheFetch }
+    });
   }
 } catch (e) {
   console.warn('Supabase init failed:', e);
@@ -633,6 +651,42 @@ async function refreshCloud(){
 
 let refreshInProgress = false;
 let lastRefreshAt = 0;
+let realtimeChannel = null;
+let realtimeRefreshTimer = null;
+
+function queueRealtimeRefresh(){
+  if(realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
+  realtimeRefreshTimer = setTimeout(async ()=>{
+    realtimeRefreshTimer = null;
+    if(document.visibilityState === 'hidden') return;
+    await refreshCloudSilently(true);
+  }, 500);
+}
+
+function setupRealtimeUpdates(){
+  if(!sb || realtimeChannel) return;
+
+  /*
+    Phones stay subscribed to database changes. When the admin PC inserts,
+    updates or deletes content, the phone pulls the fresh data immediately.
+    The normal polling below remains as a fallback if Realtime is unavailable.
+  */
+  realtimeChannel = sb.channel('wpu-live-content');
+
+  ['weekly_winners','events','results','documents','weekly_overalls','wpu_info']
+    .forEach(table=>{
+      realtimeChannel.on(
+        'postgres_changes',
+        { event:'*', schema:'public', table },
+        ()=>queueRealtimeRefresh()
+      );
+    });
+
+  realtimeChannel.subscribe((status)=>{
+    console.log('WPU live updates:', status);
+  });
+}
+
 async function refreshCloudSilently(force=false){
   if(!sb || restoreInProgress || refreshInProgress) return false;
   const now=Date.now();
@@ -1166,10 +1220,16 @@ if(sb){
   sb.auth.getSession().then(async ({data:res})=>{
     currentUser=res.session?.user||null;
     await cloudLoad({forceEmpty:false});
+    setupRealtimeUpdates();
     render();
-  }).catch(()=>render());
+  }).catch(()=>{
+    setupRealtimeUpdates();
+    render();
+  });
+
   sb.auth.onAuthStateChange((_event,session)=>{
     currentUser=session?.user||null;
+    setupRealtimeUpdates();
     refreshCloudSilently(true).then(()=>render());
   });
 }
@@ -1177,19 +1237,28 @@ if(sb){
 render();
 
 /* Keep live content fresh for ALL users, including phones that are not logged in.
-   The PWA caches only the app shell; these Supabase queries fetch current content. */
+   Supabase Realtime gives instant updates; polling is the safety-net. */
 let restoreInProgress=false;
 
 setInterval(()=>{
   if(sb && document.visibilityState!=='hidden' && !restoreInProgress){
-    refreshCloudSilently(false);
+    refreshCloudSilently(true);
   }
-},15000);
+},10000);
 
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible') refreshCloudSilently(true);
+  if(document.visibilityState==='visible'){
+    setupRealtimeUpdates();
+    refreshCloudSilently(true);
+  }
 });
-window.addEventListener('focus',()=>refreshCloudSilently(true));
-window.addEventListener('pageshow',()=>refreshCloudSilently(true));
+window.addEventListener('focus',()=>{
+  setupRealtimeUpdates();
+  refreshCloudSilently(true);
+});
+window.addEventListener('pageshow',()=>{
+  setupRealtimeUpdates();
+  refreshCloudSilently(true);
+});
 
 })();
