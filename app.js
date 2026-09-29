@@ -403,6 +403,7 @@ function weatherCodeText(code){
   return m[code]||'Onbekende toestande';
 }
 function windDir(deg){const dirs=['N','NO','O','SO','S','SW','W','NW'];return dirs[Math.round((Number(deg)||0)/45)%8];}
+function windCardinal(deg){const dirs=['N','O','S','W'];return dirs[Math.round((Number(deg)||0)/90)%4];}
 function avgNum(values){
   const a=values.filter(v=>Number.isFinite(v));
   return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
@@ -417,7 +418,6 @@ function weatherAtHour(hourly, dateTime){
   });
   return {idx:best,temp:Number(hourly.temperature_2m?.[best]),wind:Number(hourly.wind_speed_10m?.[best]),dir:Number(hourly.wind_direction_10m?.[best]),cloud:Number(hourly.cloud_cover?.[best]),rain:Number(hourly.precipitation_probability?.[best]),precip:Number(hourly.precipitation?.[best]),code:Number(hourly.weather_code?.[best])};
 }
-function windDir(deg){const dirs=['N','NO','O','SO','S','SW','W','NW'];return dirs[Math.round((Number(deg)||0)/45)%8];}
 function bearingBetween(a,b){
   const r=Math.PI/180, lat1=a.lat*r,lat2=b.lat*r,dlon=(b.lon-a.lon)*r;
   const y=Math.sin(dlon)*Math.cos(lat2),x=Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dlon);
@@ -454,14 +454,41 @@ function weatherRiskText(w){
   return risks;
 }
 
+function weatherErrorMessage(err,fallback='Onbekende fout.'){
+  if(err instanceof Error && err.message) return err.message;
+  if(typeof err==='string' && err.trim()) return err.trim();
+  if(err && typeof err==='object'){
+    const reason=err.reason||err.message||err.error||err.detail;
+    if(typeof reason==='string' && reason.trim()) return reason.trim();
+    try{return JSON.stringify(err);}catch(_){return fallback;}
+  }
+  return fallback;
+}
+function windHumanDescription(w,bearing){
+  if(!Number.isFinite(w?.wind)||!Number.isFinite(w?.dir)||!Number.isFinite(bearing)) return 'Winddata nie beskikbaar nie.';
+  const rel=((w.dir-bearing+540)%360)-180;
+  const d=windCardinal(w.dir);
+  if(Math.abs(rel)>=150) return `Wind kom van ${d} en is van agter.`;
+  if(Math.abs(rel)<=30) return `Wind kom van ${d} en is van voor.`;
+  if(rel>0) return `Wind kom van ${d} en druk van voor teen die duif se linker vlerk.`;
+  return `Wind kom van ${d} en druk van voor teen die duif se regter vlerk.`;
+}
+
 async function geocodePlace(q){
-  const url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=za&q='+encodeURIComponent(q);
+  const url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&countrycodes=za&q='+encodeURIComponent(q);
   const r=await fetch(url,{headers:{'Accept':'application/json'}});
   if(!r.ok) throw new Error('Kon nie die plek opspoor nie: '+q);
   const a=await r.json();
   if(!a.length) throw new Error(`Plek nie gevind nie: ${q}`);
-  return {lat:Number(a[0].lat),lon:Number(a[0].lon),name:a[0].display_name.split(',')[0]};
+  const addr=a[0].address||{};
+  const municipality=addr.municipality||addr.city_district||addr.city||addr.county||'';
+  const town=addr.town||addr.village||addr.city||addr.suburb||'';
+  let name=town||a[0].display_name.split(',')[0];
+  if(municipality && town && municipality.toLowerCase()!==town.toLowerCase()) name=`${municipality} (${town})`;
+  else if(municipality && !town) name=municipality;
+  return {lat:Number(a[0].lat),lon:Number(a[0].lon),name,municipality,town};
 }
+
 async function reversePlace(lat,lon){
   try{
     const u=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&lat=${lat}&lon=${lon}`;
@@ -569,11 +596,14 @@ async function runWeatherForecast(){
     const maxTemp=Math.max(...route.map(r=>r.temp).filter(Number.isFinite),-99);
     const maxRain=Math.max(...route.map(r=>r.rain).filter(Number.isFinite),-1);
     const rainPoints=route.filter(r=>weatherRiskText(r).some(x=>x.includes('Reën')||x.includes('Donder')));
-    const windType=avgTail>=5?'wind van agter':avgTail<=-5?'teenwind':'min of meer dwars/ligte wind';
     const summary=[];
-    summary.push(`${windType.charAt(0).toUpperCase()+windType.slice(1)} word vir die roete bereken, met ’n gemiddelde windkomponent van ${Math.round(Math.abs(avgTail))} km/h langs die vliegrigting.`);
-    if(avgTail>=5) summary.push('Dit kan ’n vinnige wedvlug wees, omdat die wind die duif se vliegrigting ondersteun.');
-    else if(avgTail<=-5) summary.push('Die wind werk teen die vliegrigting en kan die vlug stadiger maak.');
+    const startWind=route[0];
+    const endWind=route[route.length-1];
+    if(startWind) summary.push(`Loslaatpunt: ${windHumanDescription(startWind,bearing)}`);
+    if(endWind) summary.push(`Nader aan die eindpunt: ${windHumanDescription(endWind,bearing)}`);
+    if(avgTail>=5) summary.push('Die wind help oorwegend die duiwe se vliegrigting en dit kan moontlik ’n vinnige wedvlug wees.');
+    else if(avgTail<=-5) summary.push('Die wind werk oorwegend teen die duiwe se vliegrigting en kan die vlug stadiger maak.');
+    else summary.push('Die wind help of rem nie sterk oor die hele roete nie; die rigting en spoed kan van plek tot plek verskil.');
     if(maxTemp>=35) summary.push(`WAARSKUWING: Baie warm toestande word op dele van die roete verwag (tot ongeveer ${Math.round(maxTemp)}°C).`);
     else if(maxTemp>=32) summary.push(`WAARSKUWING: Warm toestande word verwag, met temperature tot ongeveer ${Math.round(maxTemp)}°C.`);
     if(maxRain>=40||rainPoints.length) summary.push(`WAARSKUWING: Daar is moontlik reën/buie op dele van die roete; hoogste berekende reënkans is ongeveer ${Math.round(Math.max(0,maxRain))}%.`);
@@ -582,8 +612,8 @@ async function runWeatherForecast(){
     const modelLabel=usable.map(x=>esc(x.model.name)).join(' • ');
     const cards=route.map((w,i)=>{
       const risks=weatherRiskText(w);
-      const windText=w.wind==null?'—':`${Math.round(w.wind)} km/h ${w.dir==null?'':windDir(w.dir)}`;
-      return `<article class="weather-card"><h3>${esc(w.name||'Roetepunt '+(i+1))}</h3><div><b>🕐 ETA ${formatClock(w.eta)}</b></div><div><b>🌡️ ${w.temp==null?'—':w.temp.toFixed(0)+'°C'}</b> • ${weatherCodeText(w.code)}</div><div>💨 Wind: <b>${windText}</b></div><div>↔️ Wind-komponent: <b>${w.tail>=0?'agter':'teen'} ${Math.round(Math.abs(w.tail))} km/h</b></div><div>🐦 Geskatte spoed: <b>${Math.round(w.speed).toLocaleString('af-ZA')} m/min</b></div><div>☁️ Wolke: <b>${w.cloud==null?'—':Math.round(w.cloud)+'%'}</b> • 🌧️ Reënkans: <b>${w.rain==null?'—':Math.round(w.rain)+'%'}</b></div>${risks.length?`<div style="margin-top:7px"><b>⚠️ ${risks.join(' • ')}</b></div>`:''}</article>`;
+      const windText=w.wind==null?'—':`${Math.round(w.wind)} km/h ${w.dir==null?'':windCardinal(w.dir)}`;
+      return `<article class="weather-card"><h3>${esc(w.name||'Roetepunt '+(i+1))}</h3><div><b>🕐 ETA ${formatClock(w.eta)}</b></div><div><b>🌡️ ${w.temp==null?'—':w.temp.toFixed(0)+'°C'}</b> • ${weatherCodeText(w.code)}</div><div>💨 Wind: <b>${windText}</b></div><div>🕊️ ${esc(windHumanDescription(w,bearing))}</div><div>🐦 Geskatte spoed: <b>${Math.round(w.speed).toLocaleString('af-ZA')} m/min</b></div><div>☁️ Wolke: <b>${w.cloud==null?'—':Math.round(w.cloud)+'%'}</b> • 🌧️ Reënkans: <b>${w.rain==null?'—':Math.round(w.rain)+'%'}</b></div>${risks.length?`<div style="margin-top:7px"><b>⚠️ ${risks.join(' • ')}</b></div>`:''}</article>`;
     }).join('');
     const warning=unavailable?`<div class="notice"><b>Let wel:</b> Een of meer modelle het nie data beskikbaar gehad nie. Die berekening gebruik: <b>${modelLabel}</b>.<br><span class="small">${unavailable}</span></div>`:'';
     out.innerHTML=`<section class="admin-card"><h2>🌦️ ${esc(A.name)} → ${esc(B.name)}</h2><p><b>${esc(date)}</b> • <b>Loslaattyd: ${esc(time)}</b> • Roetebearing: <b>${Math.round(bearing)}°</b> • Afstand: <b>${totalKm.toFixed(1)} km</b></p><div id="weatherMap"></div><h3 style="margin-top:18px">Voorspelling volgens werklike geskatte vliegtyd</h3><div class="weather-summary">${cards}</div>${warning}<div class="notice" style="margin-top:16px"><h3 style="margin:0 0 8px">📋 Opsomming</h3><div><b>Basisspoed:</b> 1 250 m/min op ’n windstil dag.</div><div><b>Geskatte aankomst:</b> ${formatClock(arrival)} • ongeveer ${Math.round(totalMin)} minute se vliegtyd.</div><div style="margin-top:8px">${summary.map(x=>`<div>• ${esc(x)}</div>`).join('')}</div><div class="small" style="margin-top:8px">Die spoed is ’n roete-skatting wat wind en hitte in ag neem; werklike duiwe se spoed kan aansienlik verskil.</div></div><div class="notice"><b>Hoe om dit te lees:</b> die loslaatpunt se weer word op die gekose loslaattyd bereken. Daarna word die geskatte vliegtyd gebruik om die voorspelling by elke volgende roetepunt te kies, sodat die eindpunt se weer nader aan die verwagte aankomstyd is.</div><div class="weather-source">Bronne/modelle: Open-Meteo; plekname/kaart: OpenStreetMap.</div></section>`;
