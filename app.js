@@ -446,7 +446,7 @@ async function weatherPage(a){
       <label>Loslaatpunt<input id="wx_from" placeholder="bv. Richmond"></label>
       <label>Eindpunt<input id="wx_to" placeholder="bv. Potchefstroom"></label>
       <label>Loslaatdatum<input id="wx_date" type="date" value="${new Date().toISOString().slice(0,10)}"></label>
-      <label>Loslaattijd<input id="wx_time" type="time" value="07:00"></label>
+      <label>Loslaattyd<input id="wx_time" type="time" value="07:00"></label>
       <div class="full"><button class="btn" onclick="runWeatherForecast()">🔎 Kry weervoorspelling</button></div>
     </div>
   </section><div id="weatherResult"></div>`;
@@ -1303,6 +1303,7 @@ async function restoreBackup(input){
 }
 
 window.go=go;
+window.runWeatherForecast=runWeatherForecast;
 window.filterCat=filterCat;
 window.openPdf=openPdf;
 window.viewEvent=viewEvent;
