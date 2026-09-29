@@ -403,30 +403,55 @@ function weatherCodeText(code){
   return m[code]||'Onbekende toestande';
 }
 function windDir(deg){const dirs=['N','NO','O','SO','S','SW','W','NW'];return dirs[Math.round((Number(deg)||0)/45)%8];}
-function weatherPointSummary(models,i){
-  const vals=models.map(m=>m?.hourly?.temperature_2m?.[i]).filter(v=>Number.isFinite(v));
-  const winds=models.map(m=>m?.hourly?.wind_speed_10m?.[i]).filter(v=>Number.isFinite(v));
-  const dirs=models.map(m=>m?.hourly?.wind_direction_10m?.[i]).filter(v=>Number.isFinite(v));
-  const clouds=models.map(m=>m?.hourly?.cloud_cover?.[i]).filter(v=>Number.isFinite(v));
-  const rain=models.map(m=>m?.hourly?.precipitation_probability?.[i]).filter(v=>Number.isFinite(v));
-  const codes=models.map(m=>m?.hourly?.weather_code?.[i]).filter(v=>Number.isFinite(v));
-  const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
-  const modeCode=codes.length?codes.sort((a,b)=>codes.filter(x=>x===b).length-codes.filter(x=>x===a).length)[0]:null;
-  return {temp:avg(vals),wind:avg(winds),dir:avg(dirs),cloud:avg(clouds),rain:avg(rain),code:modeCode};
+function avgNum(values){
+  const a=values.filter(v=>Number.isFinite(v));
+  return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
 }
-
-function weatherErrorMessage(err, fallback='Die weerdiens kon nie data terugstuur nie.'){
-  if(err instanceof Error && err.message) return err.message;
-  if(typeof err==='string' && err.trim()) return err;
-  try{
-    if(err && typeof err==='object'){
-      if(typeof err.reason==='string' && err.reason.trim()) return err.reason;
-      if(typeof err.message==='string' && err.message.trim()) return err.message;
-      if(typeof err.error==='string' && err.error.trim()) return err.error;
-      return JSON.stringify(err);
-    }
-  }catch(_){/* ignore */}
-  return fallback;
+function weatherAtHour(hourly, dateTime){
+  if(!hourly?.time?.length) return {idx:-1};
+  const target=new Date(dateTime).getTime();
+  let best=0, bestDiff=Infinity;
+  hourly.time.forEach((t,i)=>{
+    const d=Math.abs(new Date(t).getTime()-target);
+    if(d<bestDiff){bestDiff=d;best=i;}
+  });
+  return {idx:best,temp:Number(hourly.temperature_2m?.[best]),wind:Number(hourly.wind_speed_10m?.[best]),dir:Number(hourly.wind_direction_10m?.[best]),cloud:Number(hourly.cloud_cover?.[best]),rain:Number(hourly.precipitation_probability?.[best]),precip:Number(hourly.precipitation?.[best]),code:Number(hourly.weather_code?.[best])};
+}
+function windDir(deg){const dirs=['N','NO','O','SO','S','SW','W','NW'];return dirs[Math.round((Number(deg)||0)/45)%8];}
+function bearingBetween(a,b){
+  const r=Math.PI/180, lat1=a.lat*r,lat2=b.lat*r,dlon=(b.lon-a.lon)*r;
+  const y=Math.sin(dlon)*Math.cos(lat2),x=Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dlon);
+  return (Math.atan2(y,x)/r+360)%360;
+}
+function haversineKm(a,b){
+  const r=6371,rads=Math.PI/180,dLat=(b.lat-a.lat)*rads,dLon=(b.lon-a.lon)*rads;
+  const x=Math.sin(dLat/2)**2+Math.cos(a.lat*rads)*Math.cos(b.lat*rads)*Math.sin(dLon/2)**2;
+  return 2*r*Math.asin(Math.sqrt(x));
+}
+function windAlongRoute(windSpeed,windFromDeg,bearing){
+  if(!Number.isFinite(windSpeed)||!Number.isFinite(windFromDeg)) return {tail:0,cross:0};
+  const a=(windFromDeg+180-bearing)*Math.PI/180;
+  return {tail:windSpeed*Math.cos(a),cross:Math.abs(windSpeed*Math.sin(a))};
+}
+function estimateSpeed(baseMpm,weather,bearing){
+  let speed=baseMpm;
+  const wc=windAlongRoute(weather.wind,weather.dir,bearing);
+  // Wind is given as the direction it comes FROM. Tailwind adds speed; headwind reduces it.
+  speed += wc.tail*2.5;
+  if(Number.isFinite(weather.temp) && weather.temp>28) speed *= Math.max(0.88,1-(weather.temp-28)*0.015);
+  if(wc.cross>20) speed *= Math.max(0.92,1-(wc.cross-20)*0.003);
+  speed=Math.max(850,Math.min(1650,speed));
+  return {speed,tail:wc.tail,cross:wc.cross};
+}
+function formatClock(date){return new Intl.DateTimeFormat('af-ZA',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Africa/Johannesburg'}).format(date);}
+function weatherRiskText(w){
+  const risks=[];
+  if(Number.isFinite(w.temp)&&w.temp>=35) risks.push('Baie warm');
+  else if(Number.isFinite(w.temp)&&w.temp>=32) risks.push('Warm');
+  if(Number.isFinite(w.rain)&&w.rain>=40) risks.push('Reën moontlik');
+  if(Number.isFinite(w.precip)&&w.precip>=1) risks.push('Neerslag moontlik');
+  if([95,96,99].includes(w.code)) risks.push('Donderstorm moontlik');
+  return risks;
 }
 
 async function geocodePlace(q){
@@ -449,10 +474,12 @@ function interpolate(a,b,t){return {lat:a.lat+(b.lat-a.lat)*t,lon:a.lon+(b.lon-a
 
 async function fetchWeatherModel(model,points,date,time){
   const lat=points.map(p=>p.lat).join(','),lon=points.map(p=>p.lon).join(',');
+  const next=new Date(date+'T00:00:00'); next.setDate(next.getDate()+1);
+  const endDate=next.toISOString().slice(0,10);
   const params=new URLSearchParams({
     latitude:lat, longitude:lon,
     hourly:'temperature_2m,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,precipitation_probability,precipitation',
-    models:model.id, timezone:'Africa/Johannesburg', start_date:date, end_date:date
+    models:model.id, timezone:'Africa/Johannesburg', start_date:date, end_date:endDate
   });
   const url=`https://api.open-meteo.com/v1/forecast?${params.toString()}`;
   let r;
@@ -464,20 +491,18 @@ async function fetchWeatherModel(model,points,date,time){
     const detail=weatherErrorMessage(body,`HTTP ${r.status}`);
     throw new Error(`${model.name}: ${detail}`);
   }
-  if(!body || (Array.isArray(body) && !body.length) || (!Array.isArray(body) && !body.hourly)){
-    throw new Error(`${model.name}: geen bruikbare weerdata is teruggestuur nie.`);
-  }
+  if(!body || (Array.isArray(body) && !body.length) || (!Array.isArray(body) && !body.hourly)) throw new Error(`${model.name}: geen bruikbare weerdata is teruggestuur nie.`);
   return Array.isArray(body)?body:[body];
 }
 
 async function weatherPage(a){
   a.innerHTML=`<h1>🌦️ Wedvlug-weervoorspelling</h1>
-  <section class="admin-card"><p style="margin-top:0;color:var(--muted)">Die app vergelyk beskikbare ECMWF, NOAA GFS en DWD ICON-modeldata vir die roete. As een model nie data vir die gekose datum het nie, wys die app steeds die ander beskikbare modelle eerder as om die hele voorspelling te laat misluk.</p>
+  <section class="admin-card"><p style="margin-top:0;color:var(--muted)">Die voorspelling gebruik die gekose <b>loslaatpunt/dorp en loslaattyd</b> as die begin van die berekening. ’n Basisspoed van 1 250 m/min word gebruik en aangepas volgens wind, hitte en die voorspelde toestande langs die roete.</p>
     <div class="weather-form">
-      <label>Loslaatpunt<input id="wx_from" placeholder="bv. Richmond"></label>
+      <label>Loslaatpunt / dorp<input id="wx_from" placeholder="bv. Richmond"></label>
       <label>Eindpunt<input id="wx_to" placeholder="bv. Potchefstroom"></label>
       <label>Loslaatdatum<input id="wx_date" type="date" value="${new Date().toISOString().slice(0,10)}"></label>
-      <label>Loslaattijd<input id="wx_time" type="time" value="07:00"></label>
+      <label>Loslaattyd<input id="wx_time" type="time" value="07:00"></label>
       <div class="full"><button class="btn" type="button" onclick="runWeatherForecast()">🔎 Kry weervoorspelling</button></div>
     </div>
   </section><div id="weatherResult"></div>`;
@@ -489,19 +514,18 @@ async function runWeatherForecast(){
   if(!from||!to||!date){alert('Vul die loslaatpunt, eindpunt en datum in.');return;}
   const today=new Date(); today.setHours(0,0,0,0); const chosen=new Date(date+'T00:00:00'); const diff=Math.round((chosen-today)/86400000);
   if(diff<0||diff>15){alert('Hierdie voorspelling werk vir vandag tot 15 dae vooruit.');return;}
-  out.innerHTML='<div class="weather-loading">⏳ Ek soek die twee plekke, bou die reguit roete en vergelyk die beskikbare weermodelle...</div>';
+  out.innerHTML='<div class="weather-loading">⏳ Ek bereken die roete, vliegtyd en weer langs die roete vanaf die gekose loslaattyd...</div>';
   try{
     const [A,B]=await Promise.all([geocodePlace(from),geocodePlace(to)]);
-    const points=[0.1,0.3,0.5,0.7,0.9].map(t=>interpolate(A,B,t));
-    const named=await Promise.all(points.map(p=>reversePlace(p.lat,p.lon)));
+    const points=[0,0.25,0.5,0.75,1].map(t=>interpolate(A,B,t));
+    const named=await Promise.all(points.map(async(p,i)=>i===0?A.name:i===4?B.name:reversePlace(p.lat,p.lon)));
+    const totalKm=haversineKm(A,B), bearing=bearingBetween(A,B), baseMpm=1250;
 
     const settled=await Promise.all(WEATHER_MODELS.map(async model=>{
       try{return {model,data:await fetchWeatherModel(model,points,date,time),error:null};}
       catch(error){console.warn('Weermodel oorgeslaan:',model.id,error);return {model,data:null,error:weatherErrorMessage(error)};}
     }));
     let usable=settled.filter(x=>x.data&&x.data.length);
-
-    // As geen van die drie modelle data lewer nie, probeer Open-Meteo se Best Match.
     if(!usable.length){
       try{
         const fallback={id:'best_match',name:'Open-Meteo Best Match'};
@@ -513,26 +537,64 @@ async function runWeatherForecast(){
     }
 
     const modelData=usable.map(x=>x.data);
-    const targetHour=time.slice(0,5);
-    const summaries=[];
+    const startDateTime=new Date(`${date}T${time}:00+02:00`);
+    let elapsedMin=0;
+    const route=[];
     for(let i=0;i<points.length;i++){
-      const models=modelData.map(m=>m[i]).filter(Boolean);
-      const idx=models[0]?.hourly?.time?.findIndex(t=>t.slice(11,16)===targetHour);
-      summaries.push({...weatherPointSummary(models,idx>=0?idx:0),name:named[i],lat:points[i].lat,lon:points[i].lon});
+      const eta=new Date(startDateTime.getTime()+elapsedMin*60000);
+      const weatherModels=modelData.map(m=>weatherAtHour(m[i]?.hourly,eta)).filter(w=>w.idx>=0);
+      const w={
+        temp:avgNum(weatherModels.map(x=>x.temp)), wind:avgNum(weatherModels.map(x=>x.wind)), dir:avgNum(weatherModels.map(x=>x.dir)),
+        cloud:avgNum(weatherModels.map(x=>x.cloud)), rain:avgNum(weatherModels.map(x=>x.rain)), precip:avgNum(weatherModels.map(x=>x.precip)),
+        code:weatherModels.length?weatherModels.map(x=>x.code).filter(Number.isFinite).sort((a,b)=>b-a)[0]:null
+      };
+      const speedInfo=estimateSpeed(baseMpm,w,bearing);
+      route.push({...w,name:named[i],lat:points[i].lat,lon:points[i].lon,eta,speed:speedInfo.speed,tail:speedInfo.tail,cross:speedInfo.cross,elapsed:elapsedMin});
+      if(i<points.length-1){
+        const legKm=haversineKm(points[i],points[i+1]);
+        elapsedMin += (legKm*1000)/speedInfo.speed;
+      }
     }
+    // Recalculate weather at the final ETA once the route time has been established.
+    const finish=route[route.length-1];
+    const finishWeatherModels=modelData.map(m=>weatherAtHour(m[4]?.hourly,finish.eta)).filter(w=>w.idx>=0);
+    if(finishWeatherModels.length){
+      finish.temp=avgNum(finishWeatherModels.map(x=>x.temp)); finish.wind=avgNum(finishWeatherModels.map(x=>x.wind)); finish.dir=avgNum(finishWeatherModels.map(x=>x.dir));
+      finish.cloud=avgNum(finishWeatherModels.map(x=>x.cloud)); finish.rain=avgNum(finishWeatherModels.map(x=>x.rain)); finish.precip=avgNum(finishWeatherModels.map(x=>x.precip));
+      finish.code=finishWeatherModels.map(x=>x.code).filter(Number.isFinite).sort((a,b)=>b-a)[0];
+    }
+    const totalMin=route[route.length-1]?.elapsed||0;
+    const arrival=new Date(startDateTime.getTime()+totalMin*60000);
+    const avgTail=avgNum(route.map(r=>r.tail));
+    const maxTemp=Math.max(...route.map(r=>r.temp).filter(Number.isFinite),-99);
+    const maxRain=Math.max(...route.map(r=>r.rain).filter(Number.isFinite),-1);
+    const rainPoints=route.filter(r=>weatherRiskText(r).some(x=>x.includes('Reën')||x.includes('Donder')));
+    const windType=avgTail>=5?'wind van agter':avgTail<=-5?'teenwind':'min of meer dwars/ligte wind';
+    const summary=[];
+    summary.push(`${windType.charAt(0).toUpperCase()+windType.slice(1)} word vir die roete bereken, met ’n gemiddelde windkomponent van ${Math.round(Math.abs(avgTail))} km/h langs die vliegrigting.`);
+    if(avgTail>=5) summary.push('Dit kan ’n vinnige wedvlug wees, omdat die wind die duif se vliegrigting ondersteun.');
+    else if(avgTail<=-5) summary.push('Die wind werk teen die vliegrigting en kan die vlug stadiger maak.');
+    if(maxTemp>=35) summary.push(`WAARSKUWING: Baie warm toestande word op dele van die roete verwag (tot ongeveer ${Math.round(maxTemp)}°C).`);
+    else if(maxTemp>=32) summary.push(`WAARSKUWING: Warm toestande word verwag, met temperature tot ongeveer ${Math.round(maxTemp)}°C.`);
+    if(maxRain>=40||rainPoints.length) summary.push(`WAARSKUWING: Daar is moontlik reën/buie op dele van die roete; hoogste berekende reënkans is ongeveer ${Math.round(Math.max(0,maxRain))}%.`);
+
     const unavailable=settled.filter(x=>!x.data).map(x=>`${x.model.name}: ${x.error}`).join('<br>');
     const modelLabel=usable.map(x=>esc(x.model.name)).join(' • ');
-    const cards=summaries.map((w,i)=>`<article class="weather-card"><h3>${esc(w.name||'Roetepunt '+(i+1))}</h3><div><b>🌡️ ${w.temp==null?'—':w.temp.toFixed(0)+'°C'}</b> • ${weatherCodeText(w.code)}</div><div>☁️ Wolke: <b>${w.cloud==null?'—':Math.round(w.cloud)+'%'}</b></div><div>💨 Wind: <b>${w.wind==null?'—':Math.round(w.wind)+' km/h'} ${w.dir==null?'':windDir(w.dir)}</b></div><div>🌧️ Reënkans: <b>${w.rain==null?'—':Math.round(w.rain)+'%'}</b></div><div class="small">${usable.map((x,j)=>x.model.name+': '+(modelData[j][i]?.hourly?.wind_speed_10m?.[0]!=null?Math.round(modelData[j][i].hourly.wind_speed_10m[0])+' km/h':'—')).join(' • ')}</div></article>`).join('');
-    const warning=unavailable?`<div class="notice"><b>Let wel:</b> Een of meer modelle het nie data vir hierdie datum beskikbaar gehad nie. Die voorspelling is bereken met: <b>${modelLabel}</b>.<br><span class="small">${unavailable}</span></div>`:'';
-    out.innerHTML=`<section class="admin-card"><h2>🌦️ ${esc(A.name)} → ${esc(B.name)}</h2><p><b>${esc(date)}</b> om <b>${esc(time)}</b> • Reguitlyn tussen loslaatpunt en eindpunt. Die 5 gemerkte punte gee 'n maklik-leesbare roete-oorsig.</p><div id="weatherMap"></div><div class="weather-summary">${cards}</div>${warning}<div class="notice"><b>Hoe om dit te lees:</b> kyk veral na die windrigting teenoor die duif se vliegrigting, windspoed/-sterkte, wolkbedekking en reënkans. Die modelle wys voorspelde toestande en is nie 'n waarborg van die werklike weer nie.</div><div class="weather-source">Bronne/modelle: Open-Meteo; plekname/kaart: OpenStreetMap.</div></section>`;
+    const cards=route.map((w,i)=>{
+      const risks=weatherRiskText(w);
+      const windText=w.wind==null?'—':`${Math.round(w.wind)} km/h ${w.dir==null?'':windDir(w.dir)}`;
+      return `<article class="weather-card"><h3>${esc(w.name||'Roetepunt '+(i+1))}</h3><div><b>🕐 ETA ${formatClock(w.eta)}</b></div><div><b>🌡️ ${w.temp==null?'—':w.temp.toFixed(0)+'°C'}</b> • ${weatherCodeText(w.code)}</div><div>💨 Wind: <b>${windText}</b></div><div>↔️ Wind-komponent: <b>${w.tail>=0?'agter':'teen'} ${Math.round(Math.abs(w.tail))} km/h</b></div><div>🐦 Geskatte spoed: <b>${Math.round(w.speed).toLocaleString('af-ZA')} m/min</b></div><div>☁️ Wolke: <b>${w.cloud==null?'—':Math.round(w.cloud)+'%'}</b> • 🌧️ Reënkans: <b>${w.rain==null?'—':Math.round(w.rain)+'%'}</b></div>${risks.length?`<div style="margin-top:7px"><b>⚠️ ${risks.join(' • ')}</b></div>`:''}</article>`;
+    }).join('');
+    const warning=unavailable?`<div class="notice"><b>Let wel:</b> Een of meer modelle het nie data beskikbaar gehad nie. Die berekening gebruik: <b>${modelLabel}</b>.<br><span class="small">${unavailable}</span></div>`:'';
+    out.innerHTML=`<section class="admin-card"><h2>🌦️ ${esc(A.name)} → ${esc(B.name)}</h2><p><b>${esc(date)}</b> • <b>Loslaattyd: ${esc(time)}</b> • Roetebearing: <b>${Math.round(bearing)}°</b> • Afstand: <b>${totalKm.toFixed(1)} km</b></p><div id="weatherMap"></div><h3 style="margin-top:18px">Voorspelling volgens werklike geskatte vliegtyd</h3><div class="weather-summary">${cards}</div>${warning}<div class="notice" style="margin-top:16px"><h3 style="margin:0 0 8px">📋 Opsomming</h3><div><b>Basisspoed:</b> 1 250 m/min op ’n windstil dag.</div><div><b>Geskatte aankomst:</b> ${formatClock(arrival)} • ongeveer ${Math.round(totalMin)} minute se vliegtyd.</div><div style="margin-top:8px">${summary.map(x=>`<div>• ${esc(x)}</div>`).join('')}</div><div class="small" style="margin-top:8px">Die spoed is ’n roete-skatting wat wind en hitte in ag neem; werklike duiwe se spoed kan aansienlik verskil.</div></div><div class="notice"><b>Hoe om dit te lees:</b> die loslaatpunt se weer word op die gekose loslaattyd bereken. Daarna word die geskatte vliegtyd gebruik om die voorspelling by elke volgende roetepunt te kies, sodat die eindpunt se weer nader aan die verwagte aankomstyd is.</div><div class="weather-source">Bronne/modelle: Open-Meteo; plekname/kaart: OpenStreetMap.</div></section>`;
     setTimeout(()=>{
       if(!window.L)return;
       const map=L.map('weatherMap').setView([(A.lat+B.lat)/2,(A.lon+B.lon)/2],6);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
       const line=L.polyline([[A.lat,A.lon],[B.lat,B.lon]],{weight:5}).addTo(map);
-      L.marker([A.lat,A.lon]).addTo(map).bindPopup('<b>Loslaatpunt</b><br>'+esc(A.name));
-      L.marker([B.lat,B.lon]).addTo(map).bindPopup('<b>Eindpunt</b><br>'+esc(B.name));
-      summaries.forEach(w=>L.circleMarker([w.lat,w.lon],{radius:7,weight:2}).addTo(map).bindPopup('<b>'+esc(w.name)+'</b><br>'+Math.round(w.temp||0)+'°C • Wind '+Math.round(w.wind||0)+' km/h'));
+      L.marker([A.lat,A.lon]).addTo(map).bindPopup('<b>Loslaatpunt</b><br>'+esc(A.name)+'<br>Loslaattyd: '+esc(time));
+      L.marker([B.lat,B.lon]).addTo(map).bindPopup('<b>Eindpunt</b><br>'+esc(B.name)+'<br>Geskatte aankoms: '+formatClock(arrival));
+      route.forEach(w=>L.circleMarker([w.lat,w.lon],{radius:7,weight:2}).addTo(map).bindPopup('<b>'+esc(w.name)+'</b><br>ETA '+formatClock(w.eta)+'<br>'+Math.round(w.temp||0)+'°C • Wind '+Math.round(w.wind||0)+' km/h • '+Math.round(w.speed)+' m/min'));
       map.fitBounds(line.getBounds(),{padding:[25,25]});
     },50);
   }catch(e){console.error(e);out.innerHTML=`<div class="empty"><b>Die voorspelling kon nie voltooi word nie.</b><br>${esc(weatherErrorMessage(e,'Onbekende weerfout.'))}</div>`;}
