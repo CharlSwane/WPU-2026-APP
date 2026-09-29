@@ -466,12 +466,14 @@ function weatherErrorMessage(err,fallback='Onbekende fout.'){
 }
 function windHumanDescription(w,bearing){
   if(!Number.isFinite(w?.wind)||!Number.isFinite(w?.dir)||!Number.isFinite(bearing)) return 'Winddata nie beskikbaar nie.';
-  const rel=((w.dir-bearing+540)%360)-180;
+  // Weather wind direction is the direction the wind comes FROM.
+  // Describe only the source direction and its route effect; do not describe
+  // left/right wings, because that wording was causing incorrect interpretations.
   const d=windCardinal(w.dir);
-  if(Math.abs(rel)>=150) return `Wind kom van ${d} en is van agter.`;
-  if(Math.abs(rel)<=30) return `Wind kom van ${d} en is van voor.`;
-  if(rel>0) return `Wind kom van ${d} en druk van voor teen die duif se linker vlerk.`;
-  return `Wind kom van ${d} en druk van voor teen die duif se regter vlerk.`;
+  const tail=windAlongRoute(w.wind,w.dir,bearing).tail;
+  if(tail>=5) return `Wind kom vanaf ${d} en kan die duiwe vinniger laat vlieg.`;
+  if(tail<=-5) return `Wind kom vanaf ${d} en kan die vlug langer maak.`;
+  return `Wind kom vanaf ${d} en kan van die kant af waai; die uitwerking op die vlugspoed kan beperk wees.`;
 }
 
 async function geocodePlace(q){
@@ -483,9 +485,9 @@ async function geocodePlace(q){
   const addr=a[0].address||{};
   const municipality=addr.municipality||addr.city_district||addr.city||addr.county||'';
   const town=addr.town||addr.village||addr.city||addr.suburb||'';
-  let name=town||a[0].display_name.split(',')[0];
-  if(municipality && town && municipality.toLowerCase()!==town.toLowerCase()) name=`${municipality} (${town})`;
-  else if(municipality && !town) name=municipality;
+  // Weather display must use the actual/old town name, not the current
+  // municipal name (for example "JB Marks" instead of "Potchefstroom").
+  const name=town||a[0].display_name.split(',')[0];
   return {lat:Number(a[0].lat),lon:Number(a[0].lon),name,municipality,town};
 }
 
@@ -494,7 +496,8 @@ async function reversePlace(lat,lon){
     const u=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&lat=${lat}&lon=${lon}`;
     const r=await fetch(u,{headers:{'Accept':'application/json'}}); if(!r.ok) return 'Roetepunt';
     const j=await r.json(); const a=j.address||{};
-    return a.town||a.city||a.village||a.municipality||a.county||'Roetepunt';
+    // Prefer the old/local town name for weather route labels.
+    return a.town||a.village||a.city||a.suburb||a.municipality||a.county||'Roetepunt';
   }catch{return 'Roetepunt';}
 }
 function interpolate(a,b,t){return {lat:a.lat+(b.lat-a.lat)*t,lon:a.lon+(b.lon-a.lon)*t};}
