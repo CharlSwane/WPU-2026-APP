@@ -291,8 +291,8 @@ function docCard(d){
     <div class="ico">📘</div>
     <div><b>${esc(d.title)}</b><div class="meta">${esc(d.date||'')} • ${esc(d.note||'')}</div></div>
     ${d.url ? `<div class="actions">
-      <button class="btn" type="button" onclick='openPdf(${JSON.stringify(d.url)},${JSON.stringify(d.title)})'>Maak PDF oop</button>
-      <a class="btn secondary" href="${esc(d.url)}" target="_blank" rel="noopener">Open direk</a>
+      <a class="btn" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">Open dokument</a>
+      <a class="btn secondary" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer" download>Laai af</a>
     </div>` : ''}
   </div>`;
 }
@@ -768,8 +768,8 @@ function adminDocForm(){
       <label>Titel<input id="d_title"></label>
       <label>Tipe<select id="d_type"><option value="yearbook">Jaarboek</option><option value="info">Inligting</option></select></label>
       <label>Datum<input id="d_date" type="date"></label>
-      <label>PDF lêer<input id="d_file" type="file" accept="application/pdf,.pdf"></label>
-      <label>PDF URL<input id="d_url"></label>
+      <label>Dokument lêer<input id="d_file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.odt,.ods,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain"></label>
+      <label>Dokument URL<input id="d_url" placeholder="Opsioneel: plaas 'n skakel na die dokument"></label>
       <label>Nota<input id="d_note"></label>
     </div>
     <button class="btn" onclick="addDoc()">Stoor dokument</button>
@@ -856,7 +856,7 @@ async function uploadMedia(file){
   const {error}=await sb.storage.from('wpu-media').upload(path,file,{upsert:false,contentType:mime,cacheControl:'3600'});
   if(error){
     console.error('WPU storage upload error:',error);
-    throw new Error(`PDF/lêer kon nie na WPU Media opgelaai word nie: ${error.message||error.error_description||'Storage-fout'}`);
+    throw new Error(`Dokument/lêer kon nie na WPU Media opgelaai word nie: ${error.message||error.error_description||'Storage-fout'}`);
   }
   return sb.storage.from('wpu-media').getPublicUrl(path).data.publicUrl;
 }
@@ -1133,7 +1133,7 @@ async function addResult(){
     if(file) url=await uploadMedia(file);
     const row={title:val('r_title'),category:val('r_category'),date:val('r_date')||null,pdf_url:url};
     if(!row.title){alert('Titel is verpligtend.');return;}
-    if(!url){alert('Kies ’n PDF of plaas ’n PDF URL.');return;}
+    if(!url){alert('Kies ’n dokument of plaas ’n dokument URL.');return;}
     const saved=await cloudInsert('results',row);
     data.results.unshift({id:saved.id,title:saved.title,category:saved.category,date:saved.date,url:saved.pdf_url});
     save(); alert('Uitslag gestoor.'); render();
